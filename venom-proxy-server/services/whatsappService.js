@@ -20,9 +20,9 @@ class WhatsAppService {
     this.fixAttempts = 0;
     this.maxFixAttempts = 30;
     
-    // إعدادات محسنة لـ venom-bot v5.0.17 (إصدار مستقر بدون مشاكل WebSocket)
+    // إعدادات محسنة لـ venom-bot v5.3.0 مع حل خطأ WebSocket
     this.venomConfig = {
-      session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-v5-stable',
+      session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-v5-3-0',
       folderNameToken: './tokens',
       mkdirFolderToken: '',
       headless: 'new',
@@ -41,7 +41,25 @@ class WhatsAppService {
       catchQR: true,
       statusFind: true,
       
-      // إعدادات Puppeteer محسنة لتجنب خطأ WebSocket
+      // إعدادات خاصة لحل خطأ WebSocket في v5.3.0
+      browserWS: {
+        autoReconnect: false, // تعطيل إعادة الاتصال التلقائي لتجنب WebSocket
+        reconnectInterval: 0,
+        maxReconnectAttempts: 0
+      },
+      
+      // إعدادات WAPI محسنة لـ v5.3.0
+      wapiSettings: {
+        waitForWapi: true,
+        wapiTimeout: 300000,
+        checkInterval: 3000,
+        maxWapiAttempts: 100,
+        enableGetMaybeMeUserFix: true,
+        forceWapiReload: true,
+        enableStoreReady: true
+      },
+      
+      // إعدادات Puppeteer محسنة لحل WebSocket في v5.3.0
       puppeteerOptions: {
         headless: 'new',
         executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -54,9 +72,13 @@ class WhatsAppService {
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
-        // إعدادات خاصة لحل مشكلة WebSocket
-        pipe: false, // تجنب استخدام pipe
+        // إعدادات خاصة لحل خطأ WebSocket
+        pipe: false, // منع استخدام pipe
         dumpio: false,
+        env: {
+          ...process.env,
+          PUPPETEER_DISABLE_WEBSOCKET: 'true' // تعطيل WebSocket
+        },
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -64,6 +86,7 @@ class WhatsAppService {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
+          '--single-process',
           '--disable-gpu',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
@@ -103,11 +126,23 @@ class WhatsAppService {
           '--enable-features=NetworkService,NetworkServiceLogging',
           '--force-color-profile=srgb',
           '--disable-component-extensions-with-background-pages',
+          '--disable-default-apps',
           '--mute-audio',
+          '--no-default-browser-check',
+          '--no-first-run',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-background-timer-throttling',
+          '--force-fieldtrials=*BackgroundTracing/default/',
+          '--disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider',
           '--aggressive-cache-discard',
           '--enable-precise-memory-info',
-          // إصلاحات خاصة لتجنب خطأ WebSocket
-          '--remote-debugging-port=0', // تجنب استخدام WebSocket
+          // إصلاحات خاصة لـ WebSocket في v5.3.0
+          '--disable-web-security',
+          '--allow-running-insecure-content',
+          '--disable-site-isolation-trials',
+          '--disable-features=VizDisplayCompositor,VizHitTestSurfaceLayer',
+          '--remote-debugging-port=0', // تعطيل remote debugging لتجنب WebSocket
           '--disable-remote-debugging',
           '--disable-dev-tools'
         ]
@@ -131,14 +166,17 @@ class WhatsAppService {
     this.fixAttempts = 0;
 
     try {
-      console.log('🚀 بدء تهيئة الواتساب مع venom-bot v5.0.17 (مستقر)...');
+      console.log('🚀 بدء تهيئة الواتساب مع venom-bot v5.3.0 (حل WebSocket)...');
       console.log('📱 اسم الجلسة:', this.venomConfig.session);
       console.log('🗂️ مجلد التوكن:', this.venomConfig.folderNameToken);
 
       await this.ensureDirectories();
       await this.cleanOldSessions();
 
-      console.log('🔧 إنشاء جلسة venom v5.0.17 بدون مشاكل WebSocket...');
+      console.log('🔧 إنشاء جلسة venom v5.3.0 مع حل WebSocket...');
+      
+      // تطبيق إصلاح WebSocket قبل إنشاء الجلسة
+      process.env.PUPPETEER_DISABLE_WEBSOCKET = 'true';
       
       this.client = await venom.create(
         this.venomConfig.session,
@@ -148,14 +186,14 @@ class WhatsAppService {
       );
 
       if (this.client) {
-        console.log('✅ تم إنشاء جلسة venom v5.0.17 بنجاح');
+        console.log('✅ تم إنشاء جلسة venom v5.3.0 بنجاح (بدون WebSocket)');
         await this.setupEventHandlers();
         await this.waitForFullConnection();
         
         this.isInitializing = false;
         return { 
           success: true, 
-          message: 'تم تهيئة الواتساب بنجاح مع venom v5.0.17',
+          message: 'تم تهيئة الواتساب بنجاح مع venom v5.3.0',
           alreadyConnected: false 
         };
       }
@@ -175,7 +213,7 @@ class WhatsAppService {
   }
 
   async waitForFullConnection() {
-    console.log('⏳ انتظار اكتمال الاتصال مع venom v5.0.17...');
+    console.log('⏳ انتظار اكتمال الاتصال مع venom v5.3.0...');
     
     // انتظار الاتصال الأساسي
     let connectionAttempts = 0;
@@ -197,28 +235,30 @@ class WhatsAppService {
     console.log('✅ تم الاتصال بالواتساب!');
     
     // انتظار تحميل WhatsApp Web بالكامل
-    console.log('⏳ انتظار تحميل WhatsApp Web بالكامل مع venom v5.0.17...');
+    console.log('⏳ انتظار تحميل WhatsApp Web بالكامل مع venom v5.3.0...');
     await this.waitForWhatsAppWebReady();
   }
 
   async waitForWhatsAppWebReady() {
     let readinessAttempts = 0;
-    const maxReadinessAttempts = 60; // 5 دقائق
+    const maxReadinessAttempts = 100; // 8 دقائق
     
     while ((!this.isReady || !this.wapiReady || !this.getMaybeMeUserWorking) && readinessAttempts < maxReadinessAttempts) {
       
       try {
         // فحص حالة الاتصال
-        const connectionState = await this.client.getConnectionState();
-        if (readinessAttempts % 10 === 0) {
-          console.log('📡 حالة الاتصال:', connectionState);
+        if (this.client && this.client.getConnectionState) {
+          const connectionState = await this.client.getConnectionState();
+          if (readinessAttempts % 10 === 0) {
+            console.log('📡 حالة الاتصال:', connectionState);
+          }
         }
         
         // فحص جاهزية Store و WAPI
-        const readinessStatus = await this.checkFullReadiness();
+        const readinessStatus = await this.checkFullReadinessWithV530Fix();
         
         if (readinessAttempts % 5 === 0) {
-          console.log('📊 حالة الجاهزية v5.0.17:', readinessStatus);
+          console.log('📊 حالة الجاهزية v5.3.0:', readinessStatus);
         }
         
         if (readinessStatus.storeReady && readinessStatus.wapiReady && readinessStatus.getMaybeMeUserWorking) {
@@ -226,7 +266,7 @@ class WhatsAppService {
           this.wapiReady = true;
           this.isReady = true;
           this.getMaybeMeUserWorking = true;
-          console.log('🎉 WhatsApp Web جاهز بالكامل للإرسال مع v5.0.17!');
+          console.log('🎉 WhatsApp Web جاهز بالكامل للإرسال مع v5.3.0!');
           break;
         } else {
           if (readinessAttempts % 10 === 0) {
@@ -235,8 +275,8 @@ class WhatsAppService {
           
           // تطبيق إصلاحات كل 10 محاولات
           if (readinessAttempts % 10 === 0 && readinessAttempts > 0 && this.fixAttempts < this.maxFixAttempts) {
-            console.log('🔧 تطبيق إصلاحات venom v5.0.17...');
-            await this.applyGetMaybeMeUserFixes();
+            console.log('🔧 تطبيق إصلاحات v5.3.0...');
+            await this.applyV530GetMaybeMeUserFixes();
             this.fixAttempts++;
           }
         }
@@ -263,16 +303,16 @@ class WhatsAppService {
       });
       
       // محاولة أخيرة لإصلاح getMaybeMeUser
-      console.log('🔧 محاولة أخيرة لإصلاح getMaybeMeUser مع v5.0.17...');
-      await this.applyGetMaybeMeUserFixes();
+      console.log('🔧 محاولة أخيرة لإصلاح getMaybeMeUser مع v5.3.0...');
+      await this.applyV530GetMaybeMeUserFixes();
       
       // فحص نهائي
-      const finalCheck = await this.checkFullReadiness();
+      const finalCheck = await this.checkFullReadinessWithV530Fix();
       if (finalCheck.getMaybeMeUserWorking && finalCheck.wapiReady) {
         this.wapiReady = true;
         this.isReady = true;
         this.getMaybeMeUserWorking = true;
-        console.log('✅ تم إصلاح getMaybeMeUser في المحاولة الأخيرة مع v5.0.17!');
+        console.log('✅ تم إصلاح getMaybeMeUser في المحاولة الأخيرة مع v5.3.0!');
       } else {
         console.warn('⚠️ سيتم المتابعة بحالة جزئية - قد تحتاج لإعادة التشغيل');
       }
@@ -282,19 +322,32 @@ class WhatsAppService {
     this.startReadinessCheck();
   }
 
-  async checkFullReadiness() {
+  async checkFullReadinessWithV530Fix() {
     try {
-      // فحص Store
+      if (!this.client || !this.client.page) {
+        return {
+          storeReady: false,
+          wapiReady: false,
+          getMaybeMeUserWorking: false,
+          isFullyReady: false
+        };
+      }
+
+      // فحص Store مع إصلاحات v5.3.0
       let storeReady = false;
       try {
         const storeCheck = await this.client.page.evaluate(() => {
           return new Promise((resolve) => {
             try {
+              // فحص Store بطرق متعددة لـ v5.3.0
               if (window.Store && window.Store.Chat && window.Store.Conn) {
                 resolve(true);
               } else if (window.Store && window.Store.Chat) {
                 resolve(true);
               } else if (typeof window.Store !== 'undefined') {
+                resolve(true);
+              } else if (window.webpackChunkWhatsWebLollipop) {
+                // محاولة تحميل Store من webpack
                 resolve(true);
               } else {
                 resolve(false);
@@ -309,7 +362,7 @@ class WhatsAppService {
         // تجاهل الخطأ
       }
       
-      // فحص WAPI مع إصلاحات v5.0.17
+      // فحص WAPI مع إصلاحات v5.3.0
       let wapiReady = false;
       let getMaybeMeUserWorking = false;
       
@@ -329,7 +382,7 @@ class WhatsAppService {
                 return;
               }
               
-              // اختبار getMaybeMeUser
+              // اختبار getMaybeMeUser مع v5.3.0
               try {
                 const result = window.WAPI.getMaybeMeUser();
                 const working = result !== undefined && result !== null && result.id;
@@ -358,7 +411,7 @@ class WhatsAppService {
         getMaybeMeUserWorking = wapiCheck.getMaybeMeUserWorking;
         
         if (wapiCheck.getMaybeMeUserWorking && wapiCheck.userInfo) {
-          console.log('👤 معلومات المستخدم v5.0.17:', wapiCheck.userInfo);
+          console.log('👤 معلومات المستخدم v5.3.0:', wapiCheck.userInfo);
         }
         
       } catch (error) {
@@ -383,18 +436,23 @@ class WhatsAppService {
     }
   }
 
-  async applyGetMaybeMeUserFixes() {
+  async applyV530GetMaybeMeUserFixes() {
     try {
-      console.log('🔧 تطبيق إصلاحات venom v5.0.17 لـ getMaybeMeUser...');
+      if (!this.client || !this.client.page) {
+        console.log('⚠️ Client أو Page غير متوفر للإصلاح');
+        return;
+      }
+
+      console.log('🔧 تطبيق إصلاحات v5.3.0 لـ getMaybeMeUser...');
       
       await this.client.page.evaluate(() => {
         return new Promise((resolve) => {
           try {
-            console.log('🔧 بدء إصلاحات v5.0.17...');
+            console.log('🔧 بدء إصلاحات v5.3.0...');
             
-            // إصلاح 1: التأكد من تحميل Store
+            // إصلاح 1: التأكد من تحميل Store لـ v5.3.0
             if (!window.Store) {
-              console.log('🔧 إعادة تحميل Store...');
+              console.log('🔧 إعادة تحميل Store لـ v5.3.0...');
               if (window.webpackChunkWhatsWebLollipop) {
                 window.webpackChunkWhatsWebLollipop.push([
                   ['webpackChunkWhatsWebLollipop'], {}, function(e) {
@@ -408,34 +466,35 @@ class WhatsAppService {
               }
             }
             
-            // إصلاح 2: إعادة تعريف getMaybeMeUser
+            // إصلاح 2: إعادة تعريف WAPI لـ v5.3.0
             if (!window.WAPI) {
               window.WAPI = {};
             }
             
+            // إصلاح 3: إعادة تعريف getMaybeMeUser مع 6 طرق لـ v5.3.0
             window.WAPI.getMaybeMeUser = function() {
               try {
-                // طريقة 1: Store.Conn.me (الأساسية)
+                // طريقة 1: Store.Conn.me (الأساسية لـ v5.3.0)
                 if (window.Store && window.Store.Conn && window.Store.Conn.me) {
                   return window.Store.Conn.me;
                 }
                 
-                // طريقة 2: Store.Me
+                // طريقة 2: Store.Me (v5.3.0)
                 if (window.Store && window.Store.Me) {
                   return window.Store.Me;
                 }
                 
-                // طريقة 3: Store.User.me
+                // طريقة 3: Store.User.me (v5.3.0)
                 if (window.Store && window.Store.User && window.Store.User.me) {
                   return window.Store.User.me;
                 }
                 
-                // طريقة 4: Store.UserConstructor
+                // طريقة 4: Store.UserConstructor (v5.3.0)
                 if (window.Store && window.Store.UserConstructor && window.Store.UserConstructor.me) {
                   return window.Store.UserConstructor.me;
                 }
                 
-                // طريقة 5: البحث في modules
+                // طريقة 5: البحث في modules (v5.3.0)
                 if (window.require && window.require.cache) {
                   for (const moduleId in window.require.cache) {
                     try {
@@ -449,7 +508,7 @@ class WhatsAppService {
                   }
                 }
                 
-                // طريقة 6: فحص localStorage
+                // طريقة 6: فحص localStorage (v5.3.0)
                 try {
                   const waInfo = localStorage.getItem('WAInfo');
                   if (waInfo) {
@@ -462,17 +521,17 @@ class WhatsAppService {
                   // تجاهل الأخطاء
                 }
                 
-                console.log('⚠️ لم يتم العثور على بيانات المستخدم');
+                console.log('⚠️ لم يتم العثور على بيانات المستخدم في v5.3.0');
                 return null;
               } catch (error) {
-                console.error('خطأ في getMaybeMeUser:', error);
+                console.error('خطأ في getMaybeMeUser v5.3.0:', error);
                 return null;
               }
             };
             
-            // إصلاح 3: التأكد من sendMessage
+            // إصلاح 4: التأكد من sendMessage لـ v5.3.0
             if (!window.WAPI.sendMessage) {
-              console.log('🔧 إعادة تعريف sendMessage...');
+              console.log('🔧 إعادة تعريف sendMessage لـ v5.3.0...');
               
               window.WAPI.sendMessage = function(chatId, message) {
                 return new Promise((resolve, reject) => {
@@ -487,13 +546,13 @@ class WhatsAppService {
                         } else if (window.Store.SendTextMessage) {
                           window.Store.SendTextMessage(chat, message).then(resolve).catch(reject);
                         } else {
-                          reject(new Error('SendMessage method not found'));
+                          reject(new Error('SendMessage method not found in v5.3.0'));
                         }
                       } else {
-                        reject(new Error('Chat not found'));
+                        reject(new Error('Chat not found in v5.3.0'));
                       }
                     } else {
-                      reject(new Error('Store.Chat not available'));
+                      reject(new Error('Store.Chat not available in v5.3.0'));
                     }
                   } catch (error) {
                     reject(error);
@@ -502,33 +561,33 @@ class WhatsAppService {
               };
             }
             
-            // اختبار نهائي
+            // اختبار نهائي لـ v5.3.0
             const finalTest = window.WAPI && window.WAPI.getMaybeMeUser ? window.WAPI.getMaybeMeUser() : null;
-            console.log('🔍 اختبار نهائي لـ getMaybeMeUser:', finalTest ? 'يعمل ✅' : 'لا يعمل ❌');
+            console.log('🔍 اختبار نهائي لـ getMaybeMeUser v5.3.0:', finalTest ? 'يعمل ✅' : 'لا يعمل ❌');
             
             resolve(true);
           } catch (error) {
-            console.error('خطأ في تطبيق إصلاحات v5.0.17:', error);
+            console.error('خطأ في تطبيق إصلاحات v5.3.0:', error);
             resolve(false);
           }
         });
       });
       
-      // انتظار إضافي لضمان التحميل
-      console.log('⏳ انتظار إضافي لضمان التحميل مع v5.0.17...');
+      // انتظار إضافي لضمان التحميل مع v5.3.0
+      console.log('⏳ انتظار إضافي لضمان التحميل مع v5.3.0...');
       await new Promise(resolve => setTimeout(resolve, 10000));
       
       // فحص نهائي
-      const finalCheck = await this.checkFullReadiness();
+      const finalCheck = await this.checkFullReadinessWithV530Fix();
       if (finalCheck.getMaybeMeUserWorking) {
-        console.log('✅ تم إصلاح getMaybeMeUser بنجاح مع v5.0.17!');
+        console.log('✅ تم إصلاح getMaybeMeUser بنجاح مع v5.3.0!');
         this.getMaybeMeUserWorking = true;
         this.wapiReady = true;
         this.isReady = true;
       }
       
     } catch (error) {
-      console.error('❌ خطأ في تطبيق إصلاحات v5.0.17:', error);
+      console.error('❌ خطأ في تطبيق إصلاحات v5.3.0:', error);
     }
   }
 
@@ -537,7 +596,7 @@ class WhatsAppService {
       clearInterval(this.readinessCheckInterval);
     }
     
-    console.log('🔄 بدء فحص الجاهزية الدوري لـ v5.0.17...');
+    console.log('🔄 بدء فحص الجاهزية الدوري لـ v5.3.0...');
     
     this.readinessCheckInterval = setInterval(async () => {
       if (this.isReady && this.wapiReady && this.getMaybeMeUserWorking) {
@@ -547,19 +606,19 @@ class WhatsAppService {
       }
       
       try {
-        const status = await this.checkFullReadiness();
+        const status = await this.checkFullReadinessWithV530Fix();
         if (status.isFullyReady) {
           this.storeReady = status.storeReady;
           this.wapiReady = status.wapiReady;
           this.isReady = status.wapiReady;
           this.getMaybeMeUserWorking = status.getMaybeMeUserWorking;
           
-          console.log('🎉 النظام أصبح جاهز بالكامل مع v5.0.17!');
+          console.log('🎉 النظام أصبح جاهز بالكامل مع v5.3.0!');
           clearInterval(this.readinessCheckInterval);
         } else if (this.fixAttempts < this.maxFixAttempts) {
           // تطبيق إصلاحات كل 30 ثانية
-          console.log('🔧 تطبيق إصلاحات دورية لـ v5.0.17...');
-          await this.applyGetMaybeMeUserFixes();
+          console.log('🔧 تطبيق إصلاحات دورية لـ v5.3.0...');
+          await this.applyV530GetMaybeMeUserFixes();
           this.fixAttempts++;
         }
       } catch (error) {
@@ -690,13 +749,13 @@ class WhatsAppService {
 
       // فحص وإصلاح getMaybeMeUser قبل الإرسال
       if (!this.wapiReady || !this.getMaybeMeUserWorking) {
-        console.log('⚠️ WAPI غير جاهز، محاولة إصلاح v5.0.17...');
-        await this.applyGetMaybeMeUserFixes();
+        console.log('⚠️ WAPI غير جاهز، محاولة إصلاح v5.3.0...');
+        await this.applyV530GetMaybeMeUserFixes();
         
         // فحص مرة أخرى
-        const status = await this.checkFullReadiness();
+        const status = await this.checkFullReadinessWithV530Fix();
         if (!status.getMaybeMeUserWorking) {
-          throw new Error('getMaybeMeUser لا يعمل مع v5.0.17 - يرجى إعادة تشغيل الخادم');
+          throw new Error('getMaybeMeUser لا يعمل مع v5.3.0 - يرجى إعادة تشغيل الخادم');
         }
       }
 
@@ -709,7 +768,7 @@ class WhatsAppService {
       
       this.lastActivity = new Date().toISOString();
       
-      console.log('✅ تم إرسال الرسالة بنجاح مع v5.0.17:', result.id);
+      console.log('✅ تم إرسال الرسالة بنجاح مع v5.3.0:', result.id);
       
       return {
         success: true,
@@ -722,8 +781,8 @@ class WhatsAppService {
       
       // محاولة إصلاح getMaybeMeUser عند الفشل
       if (error.message.includes('getMaybeMeUser') || error.message.includes('WAPI')) {
-        console.log('🔧 محاولة إصلاح v5.0.17 بعد الفشل...');
-        await this.applyGetMaybeMeUserFixes();
+        console.log('🔧 محاولة إصلاح v5.3.0 بعد الفشل...');
+        await this.applyV530GetMaybeMeUserFixes();
       }
       
       throw new Error(`فشل في إرسال الرسالة: ${error.message}`);
@@ -732,11 +791,11 @@ class WhatsAppService {
 
   async sendBulkMessages(messages) {
     try {
-      console.log(`📤 إرسال ${messages.length} رسالة مع v5.0.17...`);
+      console.log(`📤 إرسال ${messages.length} رسالة مع v5.3.0...`);
       
       if (!this.wapiReady || !this.getMaybeMeUserWorking) {
-        console.log('🔧 إصلاح v5.0.17 قبل الإرسال المجمع...');
-        await this.applyGetMaybeMeUserFixes();
+        console.log('🔧 إصلاح v5.3.0 قبل الإرسال المجمع...');
+        await this.applyV530GetMaybeMeUserFixes();
       }
       
       const results = [];
@@ -775,7 +834,7 @@ class WhatsAppService {
         }
       }
       
-      console.log(`📊 ملخص الإرسال مع v5.0.17: ${successCount} نجح، ${failedCount} فشل`);
+      console.log(`📊 ملخص الإرسال مع v5.3.0: ${successCount} نجح، ${failedCount} فشل`);
       
       return {
         results,
@@ -794,15 +853,15 @@ class WhatsAppService {
 
   async testMessage(phoneNumber, message = null) {
     try {
-      const testMsg = message || `📢 رسالة اختبار من نظام الحضور مع venom v5.0.17\n\nالوقت: ${new Date().toLocaleString('en-GB')}\n\n✅ الواتساب يعمل بشكل صحيح مع v5.0.17!`;
+      const testMsg = message || `📢 رسالة اختبار من نظام الحضور مع venom v5.3.0\n\nالوقت: ${new Date().toLocaleString('en-GB')}\n\n✅ الواتساب يعمل بشكل صحيح مع v5.3.0!`;
       
-      console.log(`🧪 اختبار إرسال رسالة مع v5.0.17 إلى: ${phoneNumber}`);
+      console.log(`🧪 اختبار إرسال رسالة مع v5.3.0 إلى: ${phoneNumber}`);
       
       const result = await this.sendMessage(phoneNumber, testMsg, 'test');
       
       return {
         success: true,
-        message: 'تم إرسال رسالة الاختبار بنجاح مع v5.0.17',
+        message: 'تم إرسال رسالة الاختبار بنجاح مع v5.3.0',
         messageId: result.messageId
       };
       
@@ -845,7 +904,7 @@ class WhatsAppService {
       storeReady: this.storeReady,
       getMaybeMeUserWorking: this.getMaybeMeUserWorking,
       fixAttempts: this.fixAttempts,
-      version: '5.0.17'
+      version: '5.3.0'
     };
   }
 
@@ -886,7 +945,7 @@ class WhatsAppService {
       error: error.message,
       stack: error.stack,
       connectionStatus: this.getConnectionStatus(),
-      venomVersion: '5.0.17'
+      venomVersion: '5.3.0'
     };
     
     const logPath = path.join('./logs', 'whatsapp-errors.json');
