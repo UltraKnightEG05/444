@@ -300,6 +300,7 @@ class WhatsAppService {
   async checkFullReadinessWithV530Fix() {
     try {
       if (!this.client || !this.client.page) {
+        console.log('⚠️ Client أو Page غير متوفر للفحص');
         return {
           storeReady: false,
           wapiReady: false,
@@ -308,36 +309,52 @@ class WhatsAppService {
         };
       }
 
-      // فحص Store مع إصلاحات v5.3.0
+      // فحص Store مع إصلاحات v5.3.0 المحسنة
       let storeReady = false;
       try {
         const storeCheck = await this.client.page.evaluate(() => {
           return new Promise((resolve) => {
             try {
-              // فحص Store بطرق متعددة لـ v5.3.0
-              if (window.Store && window.Store.Chat && window.Store.Conn) {
+              // فحص Store بطرق متعددة محسنة لـ v5.3.0
+              if (window.Store && window.Store.Chat && window.Store.Conn && window.Store.Conn.me) {
                 resolve(true);
-              } else if (window.Store && window.Store.Chat) {
+              } else if (window.Store && window.Store.Chat && Object.keys(window.Store.Chat.models).length > 0) {
                 resolve(true);
-              } else if (typeof window.Store !== 'undefined') {
+              } else if (window.Store && window.Store.Msg) {
                 resolve(true);
               } else if (window.webpackChunkWhatsWebLollipop) {
-                // محاولة تحميل Store من webpack
+                // محاولة تحميل Store من webpack لـ v5.3.0
                 resolve(true);
+              } else if (window.require && window.require.cache) {
+                // البحث في modules cache
+                for (const moduleId in window.require.cache) {
+                  try {
+                    const module = window.require.cache[moduleId];
+                    if (module && module.exports && module.exports.Chat) {
+                      window.Store = module.exports;
+                      resolve(true);
+                      return;
+                    }
+                  } catch (e) {
+                    // تجاهل الأخطاء
+                  }
+                }
+                resolve(false);
               } else {
                 resolve(false);
               }
             } catch (error) {
+              console.log('خطأ في فحص Store:', error);
               resolve(false);
             }
           });
         });
         storeReady = storeCheck;
       } catch (error) {
-        // تجاهل الخطأ
+        console.log('⚠️ خطأ في فحص Store:', error.message);
       }
       
-      // فحص WAPI مع إصلاحات v5.3.0
+      // فحص WAPI مع إصلاحات v5.3.0 المحسنة
       let wapiReady = false;
       let getMaybeMeUserWorking = false;
       
@@ -345,30 +362,132 @@ class WhatsAppService {
         const wapiCheck = await this.client.page.evaluate(() => {
           return new Promise((resolve) => {
             try {
-              // فحص وجود WAPI
+              // فحص وجود WAPI لـ v5.3.0
+              if (typeof window.WAPI === 'undefined') {
+                console.log('WAPI غير موجود، محاولة إنشاؤه...');
+                window.WAPI = {};
+              }
+              
+              // التأكد من وجود Store أولاً
+              if (!window.Store) {
+                console.log('Store غير موجود، محاولة تحميله...');
+                if (window.webpackChunkWhatsWebLollipop) {
+                  window.webpackChunkWhatsWebLollipop.push([
+                    ['webpackChunkWhatsWebLollipop'], {}, function(e) {
+                      Object.entries(e.c).forEach(([key, value]) => {
+                        if (value.exports && value.exports.default && value.exports.default.Chat) {
+                          window.Store = value.exports.default;
+                        }
+                      });
+                    }
+                  ]);
+                }
+              }
+              
+              // إعادة فحص WAPI بعد التحميل
               if (typeof window.WAPI === 'undefined') {
                 resolve({ wapiExists: false, getMaybeMeUserExists: false, getMaybeMeUserWorking: false });
                 return;
               }
               
-              // فحص وجود getMaybeMeUser
+              // إنشاء getMaybeMeUser إذا لم يكن موجوداً
               if (typeof window.WAPI.getMaybeMeUser !== 'function') {
-                resolve({ wapiExists: true, getMaybeMeUserExists: false, getMaybeMeUserWorking: false });
-                return;
+                console.log('إنشاء getMaybeMeUser لـ v5.3.0...');
+                
+                // إنشاء getMaybeMeUser مع 8 طرق مختلفة لـ v5.3.0
+                window.WAPI.getMaybeMeUser = function() {
+                  try {
+                    // طريقة 1: Store.Conn.me (الأساسية لـ v5.3.0)
+                    if (window.Store && window.Store.Conn && window.Store.Conn.me) {
+                      return window.Store.Conn.me;
+                    }
+                    
+                    // طريقة 2: Store.Me (v5.3.0)
+                    if (window.Store && window.Store.Me) {
+                      return window.Store.Me;
+                    }
+                    
+                    // طريقة 3: Store.User.me (v5.3.0)
+                    if (window.Store && window.Store.User && window.Store.User.me) {
+                      return window.Store.User.me;
+                    }
+                    
+                    // طريقة 4: Store.UserConstructor (v5.3.0)
+                    if (window.Store && window.Store.UserConstructor && window.Store.UserConstructor.me) {
+                      return window.Store.UserConstructor.me;
+                    }
+                    
+                    // طريقة 5: Store.Contact.me (v5.3.0)
+                    if (window.Store && window.Store.Contact && window.Store.Contact.me) {
+                      return window.Store.Contact.me;
+                    }
+                    
+                    // طريقة 6: البحث في modules (v5.3.0)
+                    if (window.require && window.require.cache) {
+                      for (const moduleId in window.require.cache) {
+                        try {
+                          const module = window.require.cache[moduleId];
+                          if (module && module.exports && module.exports.me) {
+                            return module.exports.me;
+                          }
+                        } catch (e) {
+                          // تجاهل الأخطاء
+                        }
+                      }
+                    }
+                    
+                    // طريقة 7: فحص localStorage (v5.3.0)
+                    try {
+                      const waInfo = localStorage.getItem('WAInfo');
+                      if (waInfo) {
+                        const parsed = JSON.parse(waInfo);
+                        if (parsed && parsed.wid) {
+                          return { id: parsed.wid, name: parsed.pushname };
+                        }
+                      }
+                    } catch (e) {
+                      // تجاهل الأخطاء
+                    }
+                    
+                    // طريقة 8: فحص window.me مباشرة (v5.3.0)
+                    if (window.me) {
+                      return window.me;
+                    }
+                    
+                    console.log('⚠️ لم يتم العثور على بيانات المستخدم في v5.3.0');
+                    return null;
+                  } catch (error) {
+                    console.error('خطأ في getMaybeMeUser v5.3.0:', error);
+                    return null;
+                  }
+                };
               }
               
-              // اختبار getMaybeMeUser مع v5.3.0
+              // اختبار getMaybeMeUser المحسن مع v5.3.0
               try {
                 const result = window.WAPI.getMaybeMeUser();
-                const working = result !== undefined && result !== null && result.id;
+                const working = result && result.id && typeof result.id === 'string';
+                
+                if (working) {
+                  console.log('✅ getMaybeMeUser يعمل مع v5.3.0:', result.id);
+                } else {
+                  console.log('❌ getMaybeMeUser لا يعمل مع v5.3.0');
+                }
+                
                 resolve({ 
                   wapiExists: true, 
                   getMaybeMeUserExists: true, 
                   getMaybeMeUserWorking: working,
-                  userInfo: working ? { id: result.id, name: result.name || result.pushname } : null,
-                  storeConnReady: window.Store && window.Store.Conn && window.Store.Conn.me ? true : false
+                  userInfo: working ? { 
+                    id: result.id, 
+                    name: result.name || result.pushname || result.displayName,
+                    phone: result.id
+                  } : null,
+                  storeConnReady: window.Store && window.Store.Conn && window.Store.Conn.me ? true : false,
+                  storeReady: window.Store ? true : false
                 });
               } catch (error) {
+                console.error('خطأ في اختبار getMaybeMeUser:', error);
                 resolve({ 
                   wapiExists: true, 
                   getMaybeMeUserExists: true, 
@@ -377,6 +496,7 @@ class WhatsAppService {
                 });
               }
             } catch (error) {
+              console.error('خطأ عام في فحص WAPI:', error);
               resolve({ wapiExists: false, getMaybeMeUserExists: false, getMaybeMeUserWorking: false, error: error.message });
             }
           });
@@ -385,12 +505,17 @@ class WhatsAppService {
         wapiReady = wapiCheck.wapiExists;
         getMaybeMeUserWorking = wapiCheck.getMaybeMeUserWorking;
         
-        if (wapiCheck.getMaybeMeUserWorking && wapiCheck.userInfo) {
+        if (wapiCheck.getMaybeMeUserWorking) {
           console.log('👤 معلومات المستخدم v5.3.0:', wapiCheck.userInfo);
+          this.getMaybeMeUserWorking = true;
+          this.wapiReady = true;
+          this.isReady = true;
+        } else if (wapiCheck.error) {
+          console.log('❌ خطأ في WAPI:', wapiCheck.error);
         }
         
       } catch (error) {
-        // تجاهل الخطأ
+        console.log('❌ خطأ في فحص WAPI:', error.message);
       }
       
       return {
@@ -414,68 +539,126 @@ class WhatsAppService {
   async applyV530GetMaybeMeUserFixes() {
     try {
       if (!this.client || !this.client.page) {
-        console.log('⚠️ Client أو Page غير متوفر للإصلاح');
+        console.log('⚠️ Client أو Page غير متوفر للإصلاح - انتظار...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
         return;
       }
 
       console.log('🔧 تطبيق إصلاحات v5.3.0 لـ getMaybeMeUser...');
       
-      await this.client.page.evaluate(() => {
+      const fixResult = await this.client.page.evaluate(() => {
         return new Promise((resolve) => {
           try {
             console.log('🔧 بدء إصلاحات v5.3.0...');
             
-            // إصلاح 1: التأكد من تحميل Store لـ v5.3.0
+            // إصلاح 1: تحميل Store بقوة لـ v5.3.0
             if (!window.Store) {
               console.log('🔧 إعادة تحميل Store لـ v5.3.0...');
-              if (window.webpackChunkWhatsWebLollipop) {
-                window.webpackChunkWhatsWebLollipop.push([
-                  ['webpackChunkWhatsWebLollipop'], {}, function(e) {
-                    Object.entries(e.c).forEach(([key, value]) => {
-                      if (value.exports && value.exports.default && value.exports.default.Chat) {
-                        window.Store = value.exports.default;
+              
+              // طريقة 1: webpack chunk
+              try {
+                if (window.webpackChunkWhatsWebLollipop) {
+                  window.webpackChunkWhatsWebLollipop.push([
+                    ['webpackChunkWhatsWebLollipop'], {}, function(e) {
+                      Object.entries(e.c).forEach(([key, value]) => {
+                        if (value.exports && value.exports.default) {
+                          if (value.exports.default.Chat || value.exports.default.Conn) {
+                            window.Store = value.exports.default;
+                            console.log('✅ تم تحميل Store من webpack');
+                          }
+                        }
+                      });
+                    }
+                  ]);
+                }
+              } catch (e) {
+                console.log('فشل في تحميل Store من webpack');
+              }
+              
+              // طريقة 2: البحث في modules
+              if (!window.Store && window.require && window.require.cache) {
+                for (const moduleId in window.require.cache) {
+                  try {
+                    const module = window.require.cache[moduleId];
+                    if (module && module.exports) {
+                      if (module.exports.Chat && module.exports.Conn) {
+                        window.Store = module.exports;
+                        console.log('✅ تم تحميل Store من modules');
+                        break;
+                      } else if (module.exports.default && module.exports.default.Chat) {
+                        window.Store = module.exports.default;
+                        console.log('✅ تم تحميل Store من modules.default');
+                        break;
                       }
-                    });
+                    }
+                  } catch (e) {
+                    // تجاهل الأخطاء
                   }
-                ]);
+                }
               }
             }
             
-            // إصلاح 2: إعادة تعريف WAPI لـ v5.3.0
+            // إصلاح 2: إنشاء WAPI محسن لـ v5.3.0
             if (!window.WAPI) {
               window.WAPI = {};
+              console.log('✅ تم إنشاء WAPI');
             }
             
-            // إصلاح 3: إعادة تعريف getMaybeMeUser مع 6 طرق لـ v5.3.0
+            // إصلاح 3: إنشاء getMaybeMeUser محسن مع 10 طرق لـ v5.3.0
             window.WAPI.getMaybeMeUser = function() {
               try {
+                console.log('🔍 محاولة الحصول على بيانات المستخدم...');
+                
                 // طريقة 1: Store.Conn.me (الأساسية لـ v5.3.0)
                 if (window.Store && window.Store.Conn && window.Store.Conn.me) {
+                  console.log('✅ تم العثور على المستخدم من Store.Conn.me');
                   return window.Store.Conn.me;
                 }
                 
                 // طريقة 2: Store.Me (v5.3.0)
                 if (window.Store && window.Store.Me) {
+                  console.log('✅ تم العثور على المستخدم من Store.Me');
                   return window.Store.Me;
                 }
                 
                 // طريقة 3: Store.User.me (v5.3.0)
                 if (window.Store && window.Store.User && window.Store.User.me) {
+                  console.log('✅ تم العثور على المستخدم من Store.User.me');
                   return window.Store.User.me;
                 }
                 
                 // طريقة 4: Store.UserConstructor (v5.3.0)
                 if (window.Store && window.Store.UserConstructor && window.Store.UserConstructor.me) {
+                  console.log('✅ تم العثور على المستخدم من Store.UserConstructor');
                   return window.Store.UserConstructor.me;
                 }
                 
-                // طريقة 5: البحث في modules (v5.3.0)
+                // طريقة 5: Store.Contact.me (v5.3.0)
+                if (window.Store && window.Store.Contact && window.Store.Contact.me) {
+                  console.log('✅ تم العثور على المستخدم من Store.Contact.me');
+                  return window.Store.Contact.me;
+                }
+                
+                // طريقة 6: Store.Wap (v5.3.0)
+                if (window.Store && window.Store.Wap && window.Store.Wap.me) {
+                  console.log('✅ تم العثور على المستخدم من Store.Wap.me');
+                  return window.Store.Wap.me;
+                }
+                
+                // طريقة 7: البحث في modules (v5.3.0)
                 if (window.require && window.require.cache) {
                   for (const moduleId in window.require.cache) {
                     try {
                       const module = window.require.cache[moduleId];
-                      if (module && module.exports && module.exports.me) {
-                        return module.exports.me;
+                      if (module && module.exports) {
+                        if (module.exports.me && module.exports.me.id) {
+                          console.log('✅ تم العثور على المستخدم من modules');
+                          return module.exports.me;
+                        }
+                        if (module.exports.default && module.exports.default.me) {
+                          console.log('✅ تم العثور على المستخدم من modules.default');
+                          return module.exports.default.me;
+                        }
                       }
                     } catch (e) {
                       // تجاهل الأخطاء
@@ -483,20 +666,73 @@ class WhatsAppService {
                   }
                 }
                 
-                // طريقة 6: فحص localStorage (v5.3.0)
+                // طريقة 8: البحث في window objects (v5.3.0)
+                for (const key in window) {
+                  try {
+                    if (key.includes('Store') || key.includes('store')) {
+                      const obj = window[key];
+                      if (obj && obj.me && obj.me.id) {
+                        console.log('✅ تم العثور على المستخدم من window.' + key);
+                        return module.exports.me;
+                      }
+                    }
+                  } catch (e) {
+                    // تجاهل الأخطاء
+                  }
+                }
+                
+                // طريقة 9: فحص localStorage متقدم (v5.3.0)
                 try {
-                  const waInfo = localStorage.getItem('WAInfo');
-                  if (waInfo) {
-                    const parsed = JSON.parse(waInfo);
-                    if (parsed && parsed.wid) {
-                      return { id: parsed.wid, name: parsed.pushname };
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.includes('user') || key.includes('me') || key.includes('wid'))) {
+                      const value = localStorage.getItem(key);
+                      if (value) {
+                        try {
+                          const parsed = JSON.parse(value);
+                          if (parsed && (parsed.id || parsed.wid)) {
+                            console.log('✅ تم العثور على المستخدم من localStorage.' + key);
+                            return { 
+                              id: parsed.id || parsed.wid, 
+                              name: parsed.name || parsed.pushname || parsed.displayName 
+                            };
+                          }
+                        } catch (e) {
+                          // ليس JSON
+                        }
+                      }
                     }
                   }
                 } catch (e) {
                   // تجاهل الأخطاء
                 }
                 
-                console.log('⚠️ لم يتم العثور على بيانات المستخدم في v5.3.0');
+                // طريقة 10: فحص sessionStorage (v5.3.0)
+                try {
+                  for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key && (key.includes('user') || key.includes('me'))) {
+                      const value = sessionStorage.getItem(key);
+                      if (value) {
+                        try {
+                          const parsed = JSON.parse(value);
+                          if (parsed && parsed.id) {
+                            console.log('✅ تم العثور على المستخدم من sessionStorage.' + key);
+                            return parsed;
+                          }
+                        } catch (e) {
+                          // ليس JSON
+                        }
+                      }
+                    } catch (e) {
+                      // تجاهل الأخطاء
+                    }
+                  }
+                } catch (e) {
+                  // تجاهل الأخطاء
+                }
+                
+                console.log('❌ لم يتم العثور على بيانات المستخدم في v5.3.0 بجميع الطرق');
                 return null;
               } catch (error) {
                 console.error('خطأ في getMaybeMeUser v5.3.0:', error);
@@ -504,53 +740,138 @@ class WhatsAppService {
               }
             };
             
-            // إصلاح 4: التأكد من sendMessage لـ v5.3.0
+            // إصلاح 4: إنشاء sendMessage محسن لـ v5.3.0
             if (!window.WAPI.sendMessage) {
               console.log('🔧 إعادة تعريف sendMessage لـ v5.3.0...');
               
               window.WAPI.sendMessage = function(chatId, message) {
                 return new Promise((resolve, reject) => {
                   try {
+                    console.log('🔧 محاولة إرسال رسالة لـ v5.3.0...');
+                    
+                    // طريقة 1: Store.Chat (v5.3.0)
                     if (window.Store && window.Store.Chat) {
                       const chat = window.Store.Chat.get(chatId);
                       if (chat) {
-                        if (chat.sendMessage) {
+                        // محاولة طرق متعددة للإرسال
+                        if (typeof chat.sendMessage === 'function') {
+                          console.log('✅ استخدام chat.sendMessage');
                           chat.sendMessage(message).then(resolve).catch(reject);
-                        } else if (window.Store.SendMessage) {
+                          return;
+                        } else if (window.Store.SendMessage && typeof window.Store.SendMessage === 'function') {
+                          console.log('✅ استخدام Store.SendMessage');
                           window.Store.SendMessage(chat, message).then(resolve).catch(reject);
-                        } else if (window.Store.SendTextMessage) {
+                          return;
+                        } else if (window.Store.SendTextMessage && typeof window.Store.SendTextMessage === 'function') {
+                          console.log('✅ استخدام Store.SendTextMessage');
                           window.Store.SendTextMessage(chat, message).then(resolve).catch(reject);
+                          return;
+                        } else if (window.Store.Msg && typeof window.Store.Msg.add === 'function') {
+                          console.log('✅ استخدام Store.Msg.add');
+                          const msgData = {
+                            id: chatId,
+                            body: message,
+                            type: 'chat',
+                            t: Math.ceil(Date.now() / 1000)
+                          };
+                          window.Store.Msg.add(msgData).then(resolve).catch(reject);
+                          return;
                         } else {
-                          reject(new Error('SendMessage method not found in v5.3.0'));
+                          console.log('❌ لم يتم العثور على طريقة إرسال في Chat');
+                          reject(new Error('SendMessage method not found in chat object for v5.3.0'));
                         }
                       } else {
-                        reject(new Error('Chat not found in v5.3.0'));
+                        console.log('❌ Chat غير موجود');
+                        reject(new Error('Chat not found for v5.3.0'));
+                      }
+                    }
+                    
+                    // طريقة 2: البحث في modules للإرسال
+                    else if (window.require && window.require.cache) {
+                      console.log('🔧 البحث عن طريقة إرسال في modules...');
+                      let sendFunction = null;
+                      
+                      for (const moduleId in window.require.cache) {
+                        try {
+                          const module = window.require.cache[moduleId];
+                          if (module && module.exports) {
+                            if (typeof module.exports.sendMessage === 'function') {
+                              sendFunction = module.exports.sendMessage;
+                              break;
+                            } else if (module.exports.default && typeof module.exports.default.sendMessage === 'function') {
+                              sendFunction = module.exports.default.sendMessage;
+                              break;
+                            }
+                          }
+                        } catch (e) {
+                          // تجاهل الأخطاء
+                        }
+                      }
+                      
+                      if (sendFunction) {
+                        console.log('✅ تم العثور على sendFunction في modules');
+                        sendFunction(chatId, message).then(resolve).catch(reject);
+                      } else {
+                        reject(new Error('SendMessage function not found in modules for v5.3.0'));
                       }
                     } else {
-                      reject(new Error('Store.Chat not available in v5.3.0'));
+                      console.log('❌ Store.Chat غير متوفر');
+                      reject(new Error('Store.Chat not available for v5.3.0'));
                     }
                   } catch (error) {
+                    console.error('خطأ في sendMessage:', error);
                     reject(error);
                   }
                 });
               };
+              
+              console.log('✅ تم إنشاء sendMessage محسن لـ v5.3.0');
             }
             
-            // اختبار نهائي لـ v5.3.0
+            // إصلاح 5: اختبار شامل لـ v5.3.0
             const finalTest = window.WAPI && window.WAPI.getMaybeMeUser ? window.WAPI.getMaybeMeUser() : null;
-            console.log('🔍 اختبار نهائي لـ getMaybeMeUser v5.3.0:', finalTest ? 'يعمل ✅' : 'لا يعمل ❌');
+            const testResult = finalTest && finalTest.id ? true : false;
             
-            resolve(true);
+            console.log('🔍 اختبار نهائي لـ getMaybeMeUser v5.3.0:', testResult ? 'يعمل ✅' : 'لا يعمل ❌');
+            
+            if (testResult && finalTest) {
+              console.log('👤 بيانات المستخدم:', {
+                id: finalTest.id,
+                name: finalTest.name || finalTest.pushname || 'غير محدد'
+              });
+            }
+            
+            resolve({
+              success: true,
+              storeAvailable: window.Store ? true : false,
+              wapiAvailable: window.WAPI ? true : false,
+              getMaybeMeUserWorking: testResult,
+              userInfo: testResult ? finalTest : null
+            });
           } catch (error) {
             console.error('خطأ في تطبيق إصلاحات v5.3.0:', error);
-            resolve(false);
+            resolve({
+              success: false,
+              error: error.message
+            });
           }
         });
       });
       
+      console.log('📊 نتيجة الإصلاح:', fixResult);
+      
+      if (fixResult.getMaybeMeUserWorking) {
+        this.getMaybeMeUserWorking = true;
+        this.wapiReady = true;
+        this.isReady = true;
+        console.log('✅ تم إصلاح getMaybeMeUser بنجاح مع v5.3.0!');
+      }
+      
       // انتظار إضافي لضمان التحميل مع v5.3.0
-      console.log('⏳ انتظار إضافي لضمان التحميل مع v5.3.0...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      if (!fixResult.getMaybeMeUserWorking) {
+        console.log('⏳ انتظار إضافي لضمان التحميل مع v5.3.0...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      }
       
       // فحص نهائي
       const finalCheck = await this.checkFullReadinessWithV530Fix();
@@ -575,13 +896,16 @@ class WhatsAppService {
     
     this.readinessCheckInterval = setInterval(async () => {
       if (this.isReady && this.wapiReady && this.getMaybeMeUserWorking) {
-        console.log('✅ النظام جاهز بالكامل - إيقاف الفحص الدوري');
+        console.log('🎉 النظام جاهز بالكامل مع v5.3.0 - إيقاف الفحص الدوري');
         clearInterval(this.readinessCheckInterval);
         return;
       }
       
       try {
         const status = await this.checkFullReadinessWithV530Fix();
+        
+        console.log(`🔍 فحص دوري v5.3.0: Store=${status.storeReady ? '✅' : '❌'} | WAPI=${status.wapiReady ? '✅' : '❌'} | getMaybeMeUser=${status.getMaybeMeUserWorking ? '✅' : '❌'}`);
+        
         if (status.isFullyReady) {
           this.storeReady = status.storeReady;
           this.wapiReady = status.wapiReady;
@@ -591,15 +915,18 @@ class WhatsAppService {
           console.log('🎉 النظام أصبح جاهز بالكامل مع v5.3.0!');
           clearInterval(this.readinessCheckInterval);
         } else if (this.fixAttempts < this.maxFixAttempts) {
-          // تطبيق إصلاحات كل 30 ثانية
-          console.log('🔧 تطبيق إصلاحات دورية لـ v5.3.0...');
+          // تطبيق إصلاحات كل 20 ثانية
+          console.log(`🔧 تطبيق إصلاحات دورية لـ v5.3.0 (محاولة ${this.fixAttempts + 1}/${this.maxFixAttempts})...`);
           await this.applyV530GetMaybeMeUserFixes();
           this.fixAttempts++;
+        } else {
+          console.log('⚠️ تم الوصول للحد الأقصى من محاولات الإصلاح');
+          clearInterval(this.readinessCheckInterval);
         }
       } catch (error) {
         console.error('❌ خطأ في الفحص الدوري:', error.message);
       }
-    }, 10000); // فحص كل 10 ثواني
+    }, 20000); // فحص كل 20 ثانية
   }
 
   async ensureDirectories() {

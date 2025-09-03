@@ -56,12 +56,13 @@ echo ✅ تم التنظيف
 
 REM تطبيق إصلاح WebSocket
 echo 🔧 تطبيق إصلاح WebSocket لـ v5.3.0...
-node scripts/fix-websocket-v530-final.js
+npm install venom-bot@5.3.0 puppeteer@19.11.1 ws@8.14.2 puppeteer-extra@3.3.6 --save
 
 REM تعيين متغيرات البيئة لحل WebSocket
 set PUPPETEER_DISABLE_WEBSOCKET=true
 set WEBSOCKET_FIX_ENABLED=true
 set NODE_OPTIONS=--max-old-space-size=4096
+set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 echo.
 echo 🚀 تشغيل venom v5.3.0 مع حل WebSocket النهائي...
