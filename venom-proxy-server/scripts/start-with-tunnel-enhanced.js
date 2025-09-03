@@ -53,9 +53,9 @@ class TunnelManager {
 
   async startVenomProxy() {
     return new Promise((resolve, reject) => {
-      console.log('🚀 بدء تشغيل Venom Proxy v5.3.0...');
+      console.log('🚀 بدء تشغيل Venom Proxy v5.0.17 (مستقر)...');
       
-      // إعدادات البيئة المحسنة لـ v5.3.0
+      // إعدادات البيئة المحسنة لـ v5.0.17
       const env = {
         ...process.env,
         NODE_ENV: 'production',
@@ -63,7 +63,7 @@ class TunnelManager {
         WHATSAPP_DEBUG: 'false',
         ENABLE_TUNNEL: 'true',
         AUTO_START_TUNNEL: 'true',
-        VENOM_VERSION: '5.3.0',
+        VENOM_VERSION: '5.0.17',
         TUNNEL_ID: this.tunnelId
       };
       

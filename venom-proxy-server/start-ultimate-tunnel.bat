@@ -4,9 +4,9 @@ color 0A
 
 echo.
 echo ================================================
-echo    Venom Proxy Ultimate v5.3.0
+echo    Venom Proxy Ultimate v5.0.17
 echo    مع Cloudflare Tunnel التلقائي
-echo    حل نهائي لمشكلة getMaybeMeUser + WebSocket
+echo    حل نهائي لمشكلة getMaybeMeUser (بدون WebSocket)
 echo ================================================
 echo.
 
@@ -88,16 +88,16 @@ mkdir logs >nul 2>&1
 echo ✅ تم التنظيف
 
 REM تحديث المكتبات لـ v5.3.0
-echo 📦 تحديث venom-bot إلى v5.3.0...
-npm install venom-bot@5.3.0 puppeteer@23.8.0 --save
+echo 📦 تحديث venom-bot إلى v5.0.17 (مستقر)...
+npm install venom-bot@5.0.17 puppeteer@21.11.0 ws@8.14.2 --save
 
 echo.
-echo 🚀 تشغيل النظام الكامل مع v5.3.0...
-echo 🔧 مع الإصلاح النهائي لمشكلة getMaybeMeUser + WebSocket
+echo 🚀 تشغيل النظام الكامل مع v5.0.17...
+echo 🔧 مع الإصلاح النهائي لمشكلة getMaybeMeUser (بدون WebSocket)
 echo 🌍 مع Cloudflare Tunnel التلقائي
 echo 🆔 Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
 echo.
-echo ⏳ انتظر ظهور QR Code (قد يستغرق 3-5 دقائق مع v5.3.0)
+echo ⏳ انتظر ظهور QR Code (قد يستغرق 2-3 دقائق مع v5.0.17)
 echo 📱 امسح QR Code بهاتفك عند ظهوره
 echo 🌍 الخادم سيكون متاح على: https://api.go4host.net
 echo 🏠 والمحلي على: http://localhost:3002
