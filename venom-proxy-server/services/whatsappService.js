@@ -25,39 +25,27 @@ class WhatsAppService {
       session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-v5-3-0',
       folderNameToken: './tokens',
       mkdirFolderToken: '',
+      
+      // إعدادات أساسية لـ v5.3.0
       headless: 'new',
       devtools: false,
       useChrome: true,
       debug: false,
       logQR: true,
+      
+      // إعدادات الجلسة
       autoClose: 0,
       createPathFileToken: true,
       waitForLogin: true,
       disableSpins: true,
       disableWelcome: true,
       timeout: 300000,
+      
+      // إعدادات WhatsApp Web
       multidevice: true,
       refreshQR: 15000,
       catchQR: true,
       statusFind: true,
-      
-      // إعدادات خاصة لحل خطأ WebSocket في v5.3.0
-      browserWS: {
-        autoReconnect: false, // تعطيل إعادة الاتصال التلقائي لتجنب WebSocket
-        reconnectInterval: 0,
-        maxReconnectAttempts: 0
-      },
-      
-      // إعدادات WAPI محسنة لـ v5.3.0
-      wapiSettings: {
-        waitForWapi: true,
-        wapiTimeout: 300000,
-        checkInterval: 3000,
-        maxWapiAttempts: 100,
-        enableGetMaybeMeUserFix: true,
-        forceWapiReload: true,
-        enableStoreReady: true
-      },
       
       // إعدادات Puppeteer محسنة لحل WebSocket في v5.3.0
       puppeteerOptions: {
@@ -66,19 +54,19 @@ class WhatsAppService {
         defaultViewport: { width: 1366, height: 768 },
         ignoreHTTPSErrors: true,
         ignoreDefaultArgs: ['--disable-extensions'],
-        slowMo: 100,
-        timeout: 300000,
-        protocolTimeout: 300000,
+        
+        // حل خطأ WebSocket - إعدادات مهمة لـ v5.3.0
+        pipe: false, // منع استخدام pipe
+        dumpio: false, // تعطيل dumpio
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
-        // إعدادات خاصة لحل خطأ WebSocket
-        pipe: false, // منع استخدام pipe
-        dumpio: false,
-        env: {
-          ...process.env,
-          PUPPETEER_DISABLE_WEBSOCKET: 'true' // تعطيل WebSocket
-        },
+        
+        // timeout settings
+        slowMo: 100,
+        timeout: 300000,
+        protocolTimeout: 300000,
+        
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -122,29 +110,15 @@ class WhatsAppService {
           '--disable-new-content-rendering-timeout',
           '--disable-image-animation-resync',
           '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess,TranslateUI,BlinkGenPropertyTrees',
-          '--enable-features=NetworkService,NetworkServiceLogging',
-          '--force-color-profile=srgb',
-          '--disable-component-extensions-with-background-pages',
-          '--disable-default-apps',
-          '--mute-audio',
-          '--no-default-browser-check',
-          '--no-first-run',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-background-timer-throttling',
-          '--force-fieldtrials=*BackgroundTracing/default/',
-          '--disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider',
-          '--aggressive-cache-discard',
-          '--enable-precise-memory-info',
-          // إصلاحات خاصة لـ WebSocket في v5.3.0
-          '--disable-web-security',
-          '--allow-running-insecure-content',
-          '--disable-site-isolation-trials',
-          '--disable-features=VizDisplayCompositor,VizHitTestSurfaceLayer',
-          '--remote-debugging-port=0', // تعطيل remote debugging لتجنب WebSocket
+          
+          // إصلاحات خاصة لحل خطأ WebSocket في v5.3.0
           '--disable-remote-debugging',
-          '--disable-dev-tools'
+          '--remote-debugging-port=0',
+          '--disable-dev-tools',
+          '--disable-websocket',
+          '--disable-websocket-compression',
+          '--disable-websocket-extensions',
+          '--no-remote-debugging-port'
         ]
       }
     };
@@ -177,6 +151,7 @@ class WhatsAppService {
       
       // تطبيق إصلاح WebSocket قبل إنشاء الجلسة
       process.env.PUPPETEER_DISABLE_WEBSOCKET = 'true';
+      process.env.WEBSOCKET_FIX_ENABLED = 'true';
       
       this.client = await venom.create(
         this.venomConfig.session,
