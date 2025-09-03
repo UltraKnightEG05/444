@@ -1,10 +1,10 @@
 @echo off
-title Venom Proxy Ultimate + Cloudflare Tunnel
+title Venom Proxy Ultimate v5.3.0 + Cloudflare Tunnel
 color 0A
 
 echo.
 echo ================================================
-echo    Venom Proxy Ultimate v5.0.17
+echo    Venom Proxy Ultimate v5.3.0
 echo    مع Cloudflare Tunnel التلقائي
 echo    حل نهائي لمشكلة getMaybeMeUser
 echo ================================================
@@ -52,6 +52,20 @@ if %errorlevel% neq 0 (
 echo ✅ cloudflared متوفر: 
 cloudflared version
 
+REM التحقق من وجود Tunnel
+echo 🔍 فحص Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
+cloudflared tunnel list | findstr "9752631e-8b0d-48a8-b9c1-20f376ce578f" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ❌ Tunnel غير موجود
+    echo 💡 يرجى إنشاء Tunnel أولاً:
+    echo    cloudflared tunnel create attendance-venom
+    echo    cloudflared tunnel route dns attendance-venom api.go4host.net
+    pause
+    exit /b 1
+)
+
+echo ✅ Tunnel موجود ومُعد
+
 REM إغلاق العمليات السابقة
 echo.
 echo 🛑 إغلاق العمليات السابقة...
@@ -62,8 +76,8 @@ timeout /t 5 >nul
 
 echo ✅ تم إغلاق العمليات السابقة
 
-REM تنظيف سريع
-echo 🧹 تنظيف سريع...
+REM تنظيف شامل
+echo 🧹 تنظيف شامل...
 if exist tokens rmdir /s /q tokens >nul 2>&1
 if exist logs\*.log del /q logs\*.log >nul 2>&1
 if exist logs\qr-code-*.png del /q logs\qr-code-*.png >nul 2>&1
@@ -73,12 +87,17 @@ mkdir logs >nul 2>&1
 
 echo ✅ تم التنظيف
 
+REM تحديث المكتبات لـ v5.3.0
+echo 📦 تحديث venom-bot إلى v5.3.0...
+npm install venom-bot@5.3.0 puppeteer@23.8.0 --save
+
 echo.
-echo 🚀 تشغيل النظام الكامل...
+echo 🚀 تشغيل النظام الكامل مع v5.3.0...
 echo 🔧 مع الإصلاح النهائي لمشكلة getMaybeMeUser
 echo 🌍 مع Cloudflare Tunnel التلقائي
+echo 🆔 Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
 echo.
-echo ⏳ انتظر ظهور QR Code (قد يستغرق 2-3 دقائق)
+echo ⏳ انتظر ظهور QR Code (قد يستغرق 3-5 دقائق مع v5.3.0)
 echo 📱 امسح QR Code بهاتفك عند ظهوره
 echo 🌍 الخادم سيكون متاح على: https://api.go4host.net
 echo 🏠 والمحلي على: http://localhost:3002

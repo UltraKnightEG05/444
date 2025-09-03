@@ -1,20 +1,20 @@
 const path = require('path');
 
 module.exports = {
-  session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system',
+  session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-v5-3-0',
 
   // مسارات التخزين
   folderNameToken: process.env.TOKENS_PATH || './tokens',
   mkdirFolderToken: '',
 
-  // إعدادات محسنة لحل مشكلة getMaybeMeUser v5.0.17
+  // إعدادات محسنة لـ venom-bot v5.3.0
   headless: 'new',
   devtools: false,
   useChrome: true,
   debug: false,
   logQR: true,
 
-  // إعدادات خاصة لحل مشكلة getMaybeMeUser v5.0.17
+  // إعدادات خاصة لـ venom-bot v5.3.0
   multidevice: true,
   disableSpins: true,
   disableWelcome: true,
@@ -25,31 +25,32 @@ module.exports = {
   catchQR: true,
   statusFind: true,
   
-  // إعدادات جديدة لحل مشكلة getMaybeMeUser نهائياً
+  // إعدادات محسنة لـ v5.3.0
   browserWS: {
     autoReconnect: true,
     reconnectInterval: 30000,
-    maxReconnectAttempts: 5
+    maxReconnectAttempts: 10
   },
   
-  // إعدادات WAPI محسنة
+  // إعدادات WAPI محسنة لـ v5.3.0
   wapiSettings: {
     waitForWapi: true,
     wapiTimeout: 300000,
-    checkInterval: 5000,
-    maxWapiAttempts: 60,
+    checkInterval: 3000,
+    maxWapiAttempts: 100,
     enableGetMaybeMeUserFix: true,
-    forceWapiReload: true
+    forceWapiReload: true,
+    enableStoreReady: true
   },
   
-  // إعدادات Puppeteer محسنة لحل مشكلة getMaybeMeUser
+  // إعدادات Puppeteer محسنة لـ v5.3.0
   puppeteerOptions: {
     headless: 'new',
     executablePath: process.env.CHROME_PATH ||
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     defaultViewport: { width: 1366, height: 768 },
     ignoreHTTPSErrors: true,
-    slowMo: 300,
+    slowMo: 100,
     timeout: 300000,
     protocolTimeout: 300000,
     args: [
@@ -94,7 +95,7 @@ module.exports = {
       '--disable-checker-imaging',
       '--disable-new-content-rendering-timeout',
       '--disable-image-animation-resync',
-      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess,TranslateUI,BlinkGenPropertyTrees',
       '--enable-features=NetworkService,NetworkServiceLogging',
       '--force-color-profile=srgb',
@@ -115,18 +116,19 @@ module.exports = {
 
   // إعدادات الرسائل
   messageSettings: {
-    maxPerMinute: 8,
-    delay: 5000,
-    retryDelay: 5000,
+    maxPerMinute: 12,
+    delay: 3000,
+    retryDelay: 3000,
     maxRetries: 3
   },
 
-  // إعدادات إضافية
+  // إعدادات إضافية لـ v5.3.0
   timeout: 300000,
   
   // إعدادات Cloudflare Tunnel
   tunnel: {
     enabled: process.env.ENABLE_TUNNEL === 'true',
+    tunnelId: process.env.TUNNEL_ID || '9752631e-8b0d-48a8-b9c1-20f376ce578f',
     domain: process.env.TUNNEL_DOMAIN || 'api.go4host.net',
     tunnelName: process.env.TUNNEL_NAME || 'attendance-venom',
     autoStart: process.env.AUTO_START_TUNNEL === 'true'

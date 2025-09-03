@@ -8,12 +8,13 @@ class TunnelManager {
     this.venomProcess = null;
     this.tunnelProcess = null;
     this.isRunning = false;
+    this.tunnelId = process.env.TUNNEL_ID || '9752631e-8b0d-48a8-b9c1-20f376ce578f';
   }
 
   async checkCloudflared() {
     try {
-      execSync('cloudflared version', { stdio: 'pipe' });
-      console.log('✅ cloudflared متوفر');
+      const version = execSync('cloudflared version', { encoding: 'utf8' });
+      console.log('✅ cloudflared متوفر:', version.trim());
       return true;
     } catch (error) {
       console.log('❌ cloudflared غير مثبت');
@@ -29,60 +30,40 @@ class TunnelManager {
     }
   }
 
-  async checkTunnelConfig() {
-    const configPath = path.join(require('os').homedir(), '.cloudflared', 'config.yml');
-    
-    if (!await fs.pathExists(configPath)) {
-      console.log('📝 إنشاء ملف إعدادات Cloudflare Tunnel...');
+  async checkTunnelExists() {
+    try {
+      const tunnelList = execSync('cloudflared tunnel list', { encoding: 'utf8' });
+      const tunnelExists = tunnelList.includes(this.tunnelId);
       
-      const configContent = `tunnel: attendance-venom
-credentials-file: ~/.cloudflared/attendance-venom.json
-
-ingress:
-  - hostname: api.go4host.net
-    service: http://localhost:3002
-    originRequest:
-      connectTimeout: 30s
-      tlsTimeout: 30s
-      tcpKeepAlive: 30s
-      keepAliveConnections: 10
-      keepAliveTimeout: 90s
-      httpHostHeader: api.go4host.net
-  - service: http_status:404
-
-# إعدادات إضافية للاستقرار
-metrics: 0.0.0.0:8080
-no-autoupdate: true
-protocol: quic
-`;
-      
-      await fs.ensureDir(path.dirname(configPath));
-      await fs.writeFile(configPath, configContent);
-      console.log('✅ تم إنشاء ملف إعدادات Tunnel');
-      
-      console.log('\n⚠️ يرجى تشغيل الأوامر التالية أولاً:');
-      console.log('1. cloudflared tunnel login');
-      console.log('2. cloudflared tunnel create attendance-venom');
-      console.log('3. cloudflared tunnel route dns attendance-venom api.go4host.net');
-      
+      if (tunnelExists) {
+        console.log(`✅ Tunnel موجود: ${this.tunnelId}`);
+        return true;
+      } else {
+        console.log(`❌ Tunnel غير موجود: ${this.tunnelId}`);
+        console.log('💡 يرجى إنشاء Tunnel أولاً:');
+        console.log(`   cloudflared tunnel create attendance-venom`);
+        console.log(`   cloudflared tunnel route dns attendance-venom api.go4host.net`);
+        return false;
+      }
+    } catch (error) {
+      console.log('❌ خطأ في فحص Tunnel:', error.message);
       return false;
     }
-    
-    return true;
   }
 
   async startVenomProxy() {
     return new Promise((resolve, reject) => {
-      console.log('🚀 بدء تشغيل Venom Proxy...');
+      console.log('🚀 بدء تشغيل Venom Proxy v5.3.0...');
       
-      // إعدادات البيئة المحسنة
+      // إعدادات البيئة المحسنة لـ v5.3.0
       const env = {
         ...process.env,
         NODE_ENV: 'production',
         WHATSAPP_HEADLESS: 'new',
         WHATSAPP_DEBUG: 'false',
         ENABLE_TUNNEL: 'true',
-        AUTO_START_TUNNEL: 'true'
+        AUTO_START_TUNNEL: 'true',
+        VENOM_VERSION: '5.3.0'
       };
       
       this.venomProcess = spawn('node', ['server.js'], {
@@ -92,32 +73,57 @@ protocol: quic
       });
       
       let serverReady = false;
+      let qrCodeShown = false;
       
       this.venomProcess.stdout.on('data', (data) => {
         const output = data.toString();
-        console.log(output);
+        
+        // فلترة الرسائل المهمة فقط
+        if (output.includes('تم تشغيل Venom Proxy Server بنجاح') ||
+            output.includes('QR Code جديد') ||
+            output.includes('تم تسجيل الدخول') ||
+            output.includes('جاهز بالكامل') ||
+            output.includes('✅') ||
+            output.includes('❌') ||
+            output.includes('🎉')) {
+          console.log(output);
+        }
         
         // التحقق من جاهزية الخادم
         if (output.includes('تم تشغيل Venom Proxy Server بنجاح') && !serverReady) {
           serverReady = true;
-          console.log('✅ Venom Proxy جاهز');
+          console.log('✅ Venom Proxy v5.3.0 جاهز');
           resolve();
         }
         
         // عرض QR Code
-        if (output.includes('QR Code جديد')) {
+        if (output.includes('QR Code جديد') && !qrCodeShown) {
+          qrCodeShown = true;
           console.log('📱 QR Code جديد - امسحه بهاتفك');
         }
         
         // تأكيد الاتصال
         if (output.includes('النظام جاهز بالكامل')) {
-          console.log('🎉 Venom Proxy جاهز بالكامل للإرسال!');
+          console.log('🎉 Venom Proxy v5.3.0 جاهز بالكامل للإرسال!');
         }
       });
       
       this.venomProcess.stderr.on('data', (data) => {
         const error = data.toString();
-        console.error('❌ Venom Error:', error);
+        
+        // فلترة الأخطاء المهمة فقط
+        if (!error.includes('Help Keep This Project Going') &&
+            !error.includes('Node.js version verified') &&
+            !error.includes('headless option is active') &&
+            !error.includes('Executable path browser') &&
+            !error.includes('Platform: win32') &&
+            !error.includes('Browser Version:') &&
+            !error.includes('Page successfully accessed') &&
+            !error.includes('waiting for introduction') &&
+            !error.includes('Successfully connected') &&
+            !error.includes('Successfully main page')) {
+          console.error('❌ Venom Error:', error);
+        }
         
         if (error.includes('getMaybeMeUser')) {
           console.log('🔧 تم اكتشاف مشكلة getMaybeMeUser - سيتم الإصلاح تلقائياً');
@@ -139,21 +145,21 @@ protocol: quic
       // timeout للتأكد من بدء الخادم
       setTimeout(() => {
         if (!serverReady) {
-          console.log('✅ Venom Proxy بدأ (timeout)');
+          console.log('✅ Venom Proxy v5.3.0 بدأ (timeout)');
           resolve();
         }
-      }, 10000);
+      }, 15000);
     });
   }
 
   async startCloudflaredTunnel() {
     return new Promise((resolve, reject) => {
-      console.log('🌐 بدء تشغيل Cloudflare Tunnel...');
+      console.log(`🌐 بدء تشغيل Cloudflare Tunnel: ${this.tunnelId}...`);
       
       this.tunnelProcess = spawn('cloudflared', [
         'tunnel',
         'run',
-        'attendance-venom'
+        this.tunnelId
       ], {
         stdio: 'pipe'
       });
@@ -162,7 +168,15 @@ protocol: quic
       
       this.tunnelProcess.stdout.on('data', (data) => {
         const output = data.toString();
-        console.log('🌐 Tunnel:', output);
+        
+        // فلترة الرسائل المهمة فقط
+        if (output.includes('Registered tunnel connection') ||
+            output.includes('Started tunnel') ||
+            output.includes('Connection registered') ||
+            output.includes('ERR') ||
+            output.includes('WARN')) {
+          console.log('🌐 Tunnel:', output.trim());
+        }
         
         if ((output.includes('Registered tunnel connection') || 
              output.includes('Started tunnel') ||
@@ -176,7 +190,11 @@ protocol: quic
       
       this.tunnelProcess.stderr.on('data', (data) => {
         const error = data.toString();
-        console.error('❌ Tunnel Error:', error);
+        
+        // فلترة الأخطاء المهمة فقط
+        if (error.includes('ERR') || error.includes('WARN') || error.includes('failed')) {
+          console.error('❌ Tunnel Error:', error.trim());
+        }
         
         if (error.includes('failed to connect to the edge') || 
             error.includes('connection failed')) {
@@ -192,7 +210,8 @@ protocol: quic
       this.tunnelProcess.on('exit', (code) => {
         console.log(`🔴 Cloudflare Tunnel توقف بكود: ${code}`);
         if (code !== 0 && !tunnelReady) {
-          reject(new Error(`Cloudflare Tunnel توقف بكود خطأ: ${code}`));
+          console.log('⚠️ Tunnel فشل في البدء، سيتم المتابعة بدونه');
+          resolve(); // لا نفشل العملية بسبب Tunnel
         }
       });
       
@@ -202,14 +221,15 @@ protocol: quic
           console.log('✅ Cloudflare Tunnel بدأ (timeout)');
           resolve();
         }
-      }, 15000);
+      }, 20000);
     });
   }
 
   async start() {
     try {
-      console.log('🚀 بدء تشغيل Venom Proxy مع Cloudflare Tunnel...');
-      console.log('🔧 مع إصلاحات getMaybeMeUser المتقدمة');
+      console.log('🚀 بدء تشغيل Venom Proxy v5.3.0 مع Cloudflare Tunnel...');
+      console.log('🔧 مع إصلاحات getMaybeMeUser المتقدمة لـ v5.3.0');
+      console.log(`🌐 Tunnel ID: ${this.tunnelId}`);
       
       // التحقق من cloudflared
       const hasCloudflared = await this.checkCloudflared();
@@ -219,9 +239,9 @@ protocol: quic
         return;
       }
       
-      // التحقق من إعدادات Tunnel
-      const hasConfig = await this.checkTunnelConfig();
-      if (!hasConfig) {
+      // التحقق من وجود Tunnel
+      const tunnelExists = await this.checkTunnelExists();
+      if (!tunnelExists) {
         console.log('⚠️ سيتم تشغيل Venom Proxy فقط بدون Tunnel');
         await this.startVenomProxy();
         return;
@@ -231,7 +251,7 @@ protocol: quic
       await this.startVenomProxy();
       
       // انتظار قليل لضمان بدء الخادم
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
       // بدء تشغيل Cloudflare Tunnel
       await this.startCloudflaredTunnel();
@@ -242,7 +262,7 @@ protocol: quic
       console.log('📱 امسح QR Code الذي سيظهر لربط الواتساب');
       console.log('🌐 الخادم متاح محلياً على: http://localhost:3002');
       console.log('🌍 الخادم متاح عالمياً على: https://api.go4host.net');
-      console.log('🔧 تم تطبيق إصلاحات getMaybeMeUser المتقدمة');
+      console.log('🔧 تم تطبيق إصلاحات getMaybeMeUser المتقدمة لـ v5.3.0');
       
       // مراقبة العمليات
       this.monitorProcesses();
@@ -259,15 +279,15 @@ protocol: quic
     if (this.venomProcess) {
       this.venomProcess.on('exit', (code) => {
         console.log(`🔴 Venom Proxy توقف بكود: ${code}`);
-        if (code !== 0) {
-          console.log('🔄 إعادة تشغيل Venom Proxy خلال 10 ثواني...');
+        if (code !== 0 && this.isRunning) {
+          console.log('🔄 إعادة تشغيل Venom Proxy خلال 15 ثانية...');
           setTimeout(async () => {
             try {
               await this.startVenomProxy();
             } catch (error) {
               console.error('❌ فشل في إعادة تشغيل Venom Proxy:', error);
             }
-          }, 10000);
+          }, 15000);
         }
       });
     }
@@ -276,15 +296,15 @@ protocol: quic
     if (this.tunnelProcess) {
       this.tunnelProcess.on('exit', (code) => {
         console.log(`🔴 Cloudflare Tunnel توقف بكود: ${code}`);
-        if (code !== 0) {
-          console.log('🔄 إعادة تشغيل Cloudflare Tunnel خلال 5 ثواني...');
+        if (code !== 0 && this.isRunning) {
+          console.log('🔄 إعادة تشغيل Cloudflare Tunnel خلال 10 ثواني...');
           setTimeout(async () => {
             try {
               await this.startCloudflaredTunnel();
             } catch (error) {
               console.error('❌ فشل في إعادة تشغيل Cloudflare Tunnel:', error);
             }
-          }, 5000);
+          }, 10000);
         }
       });
     }
@@ -306,7 +326,7 @@ protocol: quic
     }
     
     // انتظار قليل للتأكد من الإغلاق
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
     console.log('✅ تم إيقاف جميع العمليات');
   }
