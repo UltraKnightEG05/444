@@ -230,7 +230,7 @@ class WhatsAppService {
 
   async waitForWhatsAppWebReady() {
     let readinessAttempts = 0;
-    const maxReadinessAttempts = 120; // 10 دقائق مع v5.3.0
+    const maxReadinessAttempts = 60; // 5 دقائق مع v5.3.0
     
     while ((!this.isReady || !this.wapiReady || !this.getMaybeMeUserWorking) && readinessAttempts < maxReadinessAttempts) {
       console.log('🔍 فحص الجاهزية الكاملة لـ WhatsApp Web مع v5.3.0...');
@@ -238,11 +238,16 @@ class WhatsAppService {
       try {
         // فحص حالة الاتصال
         const connectionState = await this.client.getConnectionState();
-        console.log('📡 حالة الاتصال:', connectionState);
+        if (readinessAttempts % 5 === 0) {
+          console.log('📡 حالة الاتصال:', connectionState);
+        }
         
         // فحص جاهزية Store و WAPI مع إصلاحات v5.3.0
         const readinessStatus = await this.checkFullReadinessWithV530Fix();
-        console.log('📊 حالة الجاهزية v5.3.0:', readinessStatus);
+        
+        if (readinessAttempts % 5 === 0) {
+          console.log('📊 حالة الجاهزية v5.3.0:', readinessStatus);
+        }
         
         if (readinessStatus.storeReady && readinessStatus.wapiReady && readinessStatus.getMaybeMeUserWorking) {
           this.storeReady = true;
@@ -252,7 +257,9 @@ class WhatsAppService {
           console.log('🎉 WhatsApp Web جاهز بالكامل للإرسال مع v5.3.0!');
           break;
         } else {
-          console.log('⏳ WhatsApp Web لا يزال يحمل...', readinessStatus);
+          if (readinessAttempts % 10 === 0) {
+            console.log('⏳ WhatsApp Web لا يزال يحمل...', readinessStatus);
+          }
           
           // تطبيق إصلاحات v5.3.0 كل 10 محاولات
           if (readinessAttempts % 10 === 0 && readinessAttempts > 0 && this.fixAttempts < this.maxFixAttempts) {
@@ -263,7 +270,9 @@ class WhatsAppService {
         }
         
       } catch (error) {
-        console.error('❌ خطأ في فحص الجاهزية:', error.message);
+        if (readinessAttempts % 10 === 0) {
+          console.error('❌ خطأ في فحص الجاهزية:', error.message);
+        }
       }
       
       await new Promise(resolve => setTimeout(resolve, 5000));

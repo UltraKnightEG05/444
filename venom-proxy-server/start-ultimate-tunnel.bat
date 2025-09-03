@@ -53,18 +53,18 @@ echo ✅ cloudflared متوفر:
 cloudflared version
 
 REM التحقق من وجود Tunnel
-echo 🔍 فحص Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
-cloudflared tunnel list | findstr "9752631e-8b0d-48a8-b9c1-20f376ce578f" >nul 2>&1
+echo 🔍 فحص Tunnel ID المحدد: 9752631e-8b0d-48a8-b9c1-20f376ce578f
+cloudflared tunnel info 9752631e-8b0d-48a8-b9c1-20f376ce578f >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Tunnel غير موجود
-    echo 💡 يرجى إنشاء Tunnel أولاً:
-    echo    cloudflared tunnel create attendance-venom
-    echo    cloudflared tunnel route dns attendance-venom api.go4host.net
+    echo ❌ Tunnel ID غير موجود أو غير مُعد
+    echo 💡 يرجى التأكد من إعداد Tunnel:
+    echo    cloudflared tunnel list
+    echo    cloudflared tunnel info 9752631e-8b0d-48a8-b9c1-20f376ce578f
     pause
     exit /b 1
 )
 
-echo ✅ Tunnel موجود ومُعد
+echo ✅ Tunnel ID موجود ومُعد
 
 REM إغلاق العمليات السابقة
 echo.

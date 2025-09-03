@@ -168,15 +168,16 @@ class TunnelManager {
 
   async startCloudflaredTunnel() {
     return new Promise((resolve, reject) => {
-      console.log(`🌐 بدء تشغيل Cloudflare Tunnel: ${this.tunnelId}...`);
+      console.log(`🌐 بدء تشغيل Cloudflare Tunnel بالـ ID المحدد: ${this.tunnelId}...`);
       
-      // استخدام الأمر المحدد
+      // استخدام الأمر المحدد مع Tunnel ID
       this.tunnelProcess = spawn('cloudflared', [
         'tunnel',
         'run',
         this.tunnelId
       ], {
-        stdio: 'pipe'
+        stdio: 'pipe',
+        shell: true
       });
       
       let tunnelReady = false;
@@ -184,11 +185,9 @@ class TunnelManager {
       this.tunnelProcess.stdout.on('data', (data) => {
         const output = data.toString();
         
-        // فلترة الرسائل المهمة فقط
-        if (output.includes('Registered tunnel connection') ||
-            output.includes('Started tunnel') ||
-            output.includes('Connection registered')) {
-          console.log('🌐 Tunnel:', output.trim());
+        // فلترة الرسائل المهمة فقط - تحسين للوضوح
+        if (output.includes('Registered tunnel connection')) {
+          console.log('🌐 Tunnel: اتصال مسجل بنجاح');
           
           if (!tunnelReady) {
             tunnelReady = true;
@@ -196,25 +195,27 @@ class TunnelManager {
             console.log('🌍 الخادم متاح على: https://api.go4host.net');
             resolve();
           }
-        }
-        
-        // إخفاء الرسائل التقنية غير المهمة
-        if (output.includes('ERR') || output.includes('WARN')) {
-          console.log('⚠️ Tunnel Warning:', output.trim());
+        } else if (output.includes('Started tunnel')) {
+          console.log('🌐 Tunnel: تم بدء النفق');
+        } else if (output.includes('Connection registered')) {
+          console.log('🌐 Tunnel: تم تسجيل الاتصال');
         }
       });
       
       this.tunnelProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
-        // فلترة الأخطاء - إخفاء الرسائل التقنية
-        if (error.includes('ERR') || error.includes('WARN') || error.includes('failed')) {
+        // فلترة الأخطاء - إظهار المهم فقط
+        if (error.includes('ERR') && (error.includes('failed') || error.includes('error'))) {
           console.error('❌ Tunnel Error:', error.trim());
-        }
-        
-        if (error.includes('failed to connect to the edge') || 
-            error.includes('connection failed')) {
-          console.log('🔄 محاولة إعادة الاتصال...');
+        } else if (error.includes('INF') && error.includes('Registered tunnel connection')) {
+          console.log('✅ Tunnel: اتصال مسجل');
+          if (!tunnelReady) {
+            tunnelReady = true;
+            console.log('✅ Cloudflare Tunnel متصل');
+            console.log('🌍 الخادم متاح على: https://api.go4host.net');
+            resolve();
+          }
         }
       });
       
