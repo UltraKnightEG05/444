@@ -7,14 +7,14 @@ module.exports = {
   folderNameToken: process.env.TOKENS_PATH || './tokens',
   mkdirFolderToken: '',
 
-  // إعدادات محسنة لحل مشكلة getMaybeMeUser
-  headless: 'new', // استخدام الوضع الجديد
+  // إعدادات محسنة لحل مشكلة getMaybeMeUser v5.0.17
+  headless: 'new',
   devtools: false,
   useChrome: true,
   debug: false,
   logQR: true,
 
-  // إعدادات خاصة لحل مشكلة getMaybeMeUser
+  // إعدادات خاصة لحل مشكلة getMaybeMeUser v5.0.17
   multidevice: true,
   disableSpins: true,
   disableWelcome: true,
@@ -25,6 +25,23 @@ module.exports = {
   catchQR: true,
   statusFind: true,
   
+  // إعدادات جديدة لحل مشكلة getMaybeMeUser نهائياً
+  browserWS: {
+    autoReconnect: true,
+    reconnectInterval: 30000,
+    maxReconnectAttempts: 5
+  },
+  
+  // إعدادات WAPI محسنة
+  wapiSettings: {
+    waitForWapi: true,
+    wapiTimeout: 300000,
+    checkInterval: 5000,
+    maxWapiAttempts: 60,
+    enableGetMaybeMeUserFix: true,
+    forceWapiReload: true
+  },
+  
   // إعدادات Puppeteer محسنة لحل مشكلة getMaybeMeUser
   puppeteerOptions: {
     headless: 'new',
@@ -32,8 +49,9 @@ module.exports = {
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     defaultViewport: { width: 1366, height: 768 },
     ignoreHTTPSErrors: true,
-    slowMo: 200, // إبطاء العمليات لضمان الاستقرار
-    timeout: 300000, // 5 دقائق
+    slowMo: 300,
+    timeout: 300000,
+    protocolTimeout: 300000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -76,40 +94,41 @@ module.exports = {
       '--disable-checker-imaging',
       '--disable-new-content-rendering-timeout',
       '--disable-image-animation-resync',
-      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess',
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess,TranslateUI,BlinkGenPropertyTrees',
       '--enable-features=NetworkService,NetworkServiceLogging',
       '--force-color-profile=srgb',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-default-apps',
+      '--mute-audio',
+      '--no-default-browser-check',
+      '--no-first-run',
       '--disable-backgrounding-occluded-windows',
-      '--disable-features=TranslateUI,BlinkGenPropertyTrees'
+      '--disable-renderer-backgrounding',
+      '--disable-background-timer-throttling',
+      '--force-fieldtrials=*BackgroundTracing/default/',
+      '--disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider',
+      '--aggressive-cache-discard',
+      '--enable-precise-memory-info'
     ]
   },
 
   // إعدادات الرسائل
   messageSettings: {
-    maxPerMinute: 10, // تقليل عدد الرسائل لتجنب الحظر
-    delay: 4000, // زيادة التأخير
+    maxPerMinute: 8,
+    delay: 5000,
     retryDelay: 5000,
     maxRetries: 3
   },
 
-  // إعدادات إضافية لحل مشكلة getMaybeMeUser
-  timeout: 300000, // 5 دقائق
+  // إعدادات إضافية
+  timeout: 300000,
   
-  // إعدادات خاصة لـ WhatsApp Web
-  browserWS: {
-    autoReconnect: true,
-    reconnectInterval: 30000,
-    maxReconnectAttempts: 5
-  },
-
-  // إعدادات لحل مشكلة WAPI
-  wapiSettings: {
-    waitForWapi: true,
-    wapiTimeout: 180000, // 3 دقائق
-    checkInterval: 5000,
-    maxWapiAttempts: 36 // 3 دقائق / 5 ثواني
+  // إعدادات Cloudflare Tunnel
+  tunnel: {
+    enabled: process.env.ENABLE_TUNNEL === 'true',
+    domain: process.env.TUNNEL_DOMAIN || 'api.go4host.net',
+    tunnelName: process.env.TUNNEL_NAME || 'attendance-venom',
+    autoStart: process.env.AUTO_START_TUNNEL === 'true'
   }
 };
