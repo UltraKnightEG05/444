@@ -8,7 +8,7 @@ class TunnelManager {
     this.venomProcess = null;
     this.tunnelProcess = null;
     this.isRunning = false;
-    this.tunnelId = process.env.TUNNEL_ID || '9752631e-8b0d-48a8-b9c1-20f376ce578f';
+    this.tunnelId = '9752631e-8b0d-48a8-b9c1-20f376ce578f'; // استخدام الـ ID المحدد
   }
 
   async checkCloudflared() {
@@ -63,7 +63,8 @@ class TunnelManager {
         WHATSAPP_DEBUG: 'false',
         ENABLE_TUNNEL: 'true',
         AUTO_START_TUNNEL: 'true',
-        VENOM_VERSION: '5.3.0'
+        VENOM_VERSION: '5.3.0',
+        TUNNEL_ID: this.tunnelId
       };
       
       this.venomProcess = spawn('node', ['server.js'], {
@@ -111,7 +112,7 @@ class TunnelManager {
       this.venomProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
-        // فلترة الأخطاء المهمة فقط
+        // فلترة الأخطاء - إخفاء الرسائل غير المهمة
         if (!error.includes('Help Keep This Project Going') &&
             !error.includes('Node.js version verified') &&
             !error.includes('headless option is active') &&
@@ -121,8 +122,21 @@ class TunnelManager {
             !error.includes('Page successfully accessed') &&
             !error.includes('waiting for introduction') &&
             !error.includes('Successfully connected') &&
-            !error.includes('Successfully main page')) {
-          console.error('❌ Venom Error:', error);
+            !error.includes('Successfully main page') &&
+            !error.includes('Checking QRCode status') &&
+            !error.includes('QRCode Success') &&
+            !error.includes('Checking phone is connected') &&
+            !error.includes('Connected') &&
+            !error.includes('opening main page')) {
+          
+          // عرض الأخطاء المهمة فقط
+          if (error.includes('Error:') || 
+              error.includes('❌') || 
+              error.includes('Failed') ||
+              error.includes('WebSocket') ||
+              error.includes('Invalid URL')) {
+            console.error('❌ Venom Error:', error.trim());
+          }
         }
         
         if (error.includes('getMaybeMeUser')) {
@@ -148,7 +162,7 @@ class TunnelManager {
           console.log('✅ Venom Proxy v5.3.0 بدأ (timeout)');
           resolve();
         }
-      }, 15000);
+      }, 20000);
     });
   }
 
@@ -156,6 +170,7 @@ class TunnelManager {
     return new Promise((resolve, reject) => {
       console.log(`🌐 بدء تشغيل Cloudflare Tunnel: ${this.tunnelId}...`);
       
+      // استخدام الأمر المحدد
       this.tunnelProcess = spawn('cloudflared', [
         'tunnel',
         'run',
@@ -172,26 +187,27 @@ class TunnelManager {
         // فلترة الرسائل المهمة فقط
         if (output.includes('Registered tunnel connection') ||
             output.includes('Started tunnel') ||
-            output.includes('Connection registered') ||
-            output.includes('ERR') ||
-            output.includes('WARN')) {
+            output.includes('Connection registered')) {
           console.log('🌐 Tunnel:', output.trim());
+          
+          if (!tunnelReady) {
+            tunnelReady = true;
+            console.log('✅ Cloudflare Tunnel متصل');
+            console.log('🌍 الخادم متاح على: https://api.go4host.net');
+            resolve();
+          }
         }
         
-        if ((output.includes('Registered tunnel connection') || 
-             output.includes('Started tunnel') ||
-             output.includes('Connection registered')) && !tunnelReady) {
-          tunnelReady = true;
-          console.log('✅ Cloudflare Tunnel متصل');
-          console.log('🌍 الخادم متاح على: https://api.go4host.net');
-          resolve();
+        // إخفاء الرسائل التقنية غير المهمة
+        if (output.includes('ERR') || output.includes('WARN')) {
+          console.log('⚠️ Tunnel Warning:', output.trim());
         }
       });
       
       this.tunnelProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
-        // فلترة الأخطاء المهمة فقط
+        // فلترة الأخطاء - إخفاء الرسائل التقنية
         if (error.includes('ERR') || error.includes('WARN') || error.includes('failed')) {
           console.error('❌ Tunnel Error:', error.trim());
         }
@@ -221,7 +237,7 @@ class TunnelManager {
           console.log('✅ Cloudflare Tunnel بدأ (timeout)');
           resolve();
         }
-      }, 20000);
+      }, 30000);
     });
   }
 
@@ -251,7 +267,7 @@ class TunnelManager {
       await this.startVenomProxy();
       
       // انتظار قليل لضمان بدء الخادم
-      await new Promise(resolve => setTimeout(resolve, 8000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
       // بدء تشغيل Cloudflare Tunnel
       await this.startCloudflaredTunnel();

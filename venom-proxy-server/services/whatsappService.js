@@ -1,7 +1,6 @@
 const venom = require('venom-bot');
 const fs = require('fs-extra');
 const path = require('path');
-const qrcode = require('qrcode-terminal');
 
 class WhatsAppService {
   constructor() {
@@ -21,7 +20,7 @@ class WhatsAppService {
     this.fixAttempts = 0;
     this.maxFixAttempts = 50;
     
-    // إعدادات محسنة لـ venom-bot v5.3.0
+    // إعدادات محسنة لـ venom-bot v5.3.0 مع إصلاح WebSocket
     this.venomConfig = {
       session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-v5-3-0',
       folderNameToken: './tokens',
@@ -41,30 +40,20 @@ class WhatsAppService {
       refreshQR: 15000,
       catchQR: true,
       statusFind: true,
-      // إعدادات محسنة لـ v5.3.0
-      browserWS: {
-        autoReconnect: true,
-        reconnectInterval: 30000,
-        maxReconnectAttempts: 10
-      },
-      // إعدادات WAPI محسنة لـ v5.3.0
-      wapiSettings: {
-        waitForWapi: true,
-        wapiTimeout: 300000,
-        checkInterval: 3000,
-        maxWapiAttempts: 100,
-        enableGetMaybeMeUserFix: true,
-        forceWapiReload: true,
-        enableStoreReady: true
-      },
+      
+      // إعدادات Puppeteer محسنة لـ v5.3.0 مع إصلاح WebSocket
       puppeteerOptions: {
         headless: 'new',
         executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         defaultViewport: { width: 1366, height: 768 },
         ignoreHTTPSErrors: true,
-        slowMo: 100,
+        ignoreDefaultArgs: ['--disable-extensions'],
+        slowMo: 50,
         timeout: 300000,
         protocolTimeout: 300000,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -72,7 +61,6 @@ class WhatsAppService {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          '--single-process',
           '--disable-gpu',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
@@ -112,18 +100,35 @@ class WhatsAppService {
           '--enable-features=NetworkService,NetworkServiceLogging',
           '--force-color-profile=srgb',
           '--disable-component-extensions-with-background-pages',
-          '--disable-default-apps',
           '--mute-audio',
-          '--no-default-browser-check',
-          '--no-first-run',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-background-timer-throttling',
-          '--force-fieldtrials=*BackgroundTracing/default/',
-          '--disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider',
           '--aggressive-cache-discard',
-          '--enable-precise-memory-info'
+          '--enable-precise-memory-info',
+          // إصلاحات خاصة لـ WebSocket في v5.3.0
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--allow-running-insecure-content',
+          '--disable-site-isolation-trials',
+          '--disable-features=VizDisplayCompositor,VizHitTestSurfaceLayer',
+          '--remote-debugging-port=0'
         ]
+      },
+
+      // إعدادات محسنة لـ v5.3.0
+      browserWS: {
+        autoReconnect: true,
+        reconnectInterval: 30000,
+        maxReconnectAttempts: 10
+      },
+      
+      // إعدادات WAPI محسنة لـ v5.3.0
+      wapiSettings: {
+        waitForWapi: true,
+        wapiTimeout: 300000,
+        checkInterval: 3000,
+        maxWapiAttempts: 100,
+        enableGetMaybeMeUserFix: true,
+        forceWapiReload: true,
+        enableStoreReady: true
       }
     };
   }
@@ -151,7 +156,7 @@ class WhatsAppService {
       await this.ensureDirectories();
       await this.cleanOldSessions();
 
-      console.log('🔧 إنشاء جلسة venom v5.3.0 مع إصلاحات متقدمة...');
+      console.log('🔧 إنشاء جلسة venom v5.3.0 مع إصلاحات WebSocket...');
       
       this.client = await venom.create(
         this.venomConfig.session,
@@ -179,6 +184,19 @@ class WhatsAppService {
       console.error('❌ خطأ في تهيئة الواتساب:', error);
       this.isInitializing = false;
       await this.handleError(error);
+      
+      // إذا كان الخطأ متعلق بـ WebSocket، جرب إعادة المحاولة
+      if (error.message.includes('WebSocket') || error.message.includes('Invalid URL')) {
+        console.log('🔄 محاولة إعادة التهيئة بعد خطأ WebSocket...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        
+        if (this.retries < this.maxRetries) {
+          this.retries++;
+          this.isInitializing = false;
+          return await this.initialize();
+        }
+      }
+      
       return { 
         success: false, 
         message: `فشل في تهيئة الواتساب: ${error.message}` 
@@ -212,7 +230,7 @@ class WhatsAppService {
 
   async waitForWhatsAppWebReady() {
     let readinessAttempts = 0;
-    const maxReadinessAttempts = 100; // 8 دقائق مع v5.3.0
+    const maxReadinessAttempts = 120; // 10 دقائق مع v5.3.0
     
     while ((!this.isReady || !this.wapiReady || !this.getMaybeMeUserWorking) && readinessAttempts < maxReadinessAttempts) {
       console.log('🔍 فحص الجاهزية الكاملة لـ WhatsApp Web مع v5.3.0...');
@@ -236,8 +254,8 @@ class WhatsAppService {
         } else {
           console.log('⏳ WhatsApp Web لا يزال يحمل...', readinessStatus);
           
-          // تطبيق إصلاحات v5.3.0 كل 5 محاولات
-          if (readinessAttempts % 5 === 0 && readinessAttempts > 0 && this.fixAttempts < this.maxFixAttempts) {
+          // تطبيق إصلاحات v5.3.0 كل 10 محاولات
+          if (readinessAttempts % 10 === 0 && readinessAttempts > 0 && this.fixAttempts < this.maxFixAttempts) {
             console.log('🔧 تطبيق إصلاحات venom v5.3.0 الشاملة...');
             await this.applyV530GetMaybeMeUserFixes();
             this.fixAttempts++;
@@ -278,6 +296,9 @@ class WhatsAppService {
         console.warn('⚠️ سيتم المتابعة بحالة جزئية - قد تحتاج لإعادة التشغيل');
       }
     }
+    
+    // بدء فحص دوري للجاهزية
+    this.startReadinessCheck();
   }
 
   async checkFullReadinessWithV530Fix() {
@@ -285,11 +306,15 @@ class WhatsAppService {
       // فحص Store مع v5.3.0
       let storeReady = false;
       try {
-        // في v5.3.0، Store متاح مباشرة
         const storeCheck = await this.client.page.evaluate(() => {
           return new Promise((resolve) => {
             try {
+              // طرق متعددة للتحقق من Store في v5.3.0
               if (window.Store && window.Store.Chat && window.Store.Conn) {
+                resolve(true);
+              } else if (window.Store && window.Store.Chat) {
+                resolve(true);
+              } else if (typeof window.Store !== 'undefined') {
                 resolve(true);
               } else {
                 resolve(false);
@@ -410,69 +435,79 @@ class WhatsAppService {
             }
             
             // إصلاح 2: إعادة تعريف getMaybeMeUser لـ v5.3.0
-            if (window.WAPI && typeof window.WAPI.getMaybeMeUser !== 'function') {
-              console.log('🔧 إعادة تعريف getMaybeMeUser لـ v5.3.0...');
-              
-              window.WAPI.getMaybeMeUser = function() {
-                try {
-                  // طريقة 1: Store.Conn.me (الأساسية)
-                  if (window.Store && window.Store.Conn && window.Store.Conn.me) {
-                    return window.Store.Conn.me;
-                  }
-                  
-                  // طريقة 2: Store.Me (v5.3.0)
-                  if (window.Store && window.Store.Me) {
-                    return window.Store.Me;
-                  }
-                  
-                  // طريقة 3: Store.User.me
-                  if (window.Store && window.Store.User && window.Store.User.me) {
-                    return window.Store.User.me;
-                  }
-                  
-                  // طريقة 4: Store.UserConstructor
-                  if (window.Store && window.Store.UserConstructor && window.Store.UserConstructor.me) {
-                    return window.Store.UserConstructor.me;
-                  }
-                  
-                  // طريقة 5: البحث في modules
-                  if (window.require && window.require.cache) {
-                    for (const moduleId in window.require.cache) {
-                      try {
-                        const module = window.require.cache[moduleId];
-                        if (module && module.exports && module.exports.me) {
-                          return module.exports.me;
-                        }
-                      } catch (e) {
-                        // تجاهل الأخطاء
-                      }
-                    }
-                  }
-                  
-                  // طريقة 6: فحص localStorage
-                  try {
-                    const waInfo = localStorage.getItem('WAInfo');
-                    if (waInfo) {
-                      const parsed = JSON.parse(waInfo);
-                      if (parsed && parsed.wid) {
-                        return { id: parsed.wid, name: parsed.pushname };
-                      }
-                    }
-                  } catch (e) {
-                    // تجاهل الأخطاء
-                  }
-                  
-                  console.log('⚠️ لم يتم العثور على بيانات المستخدم');
-                  return null;
-                } catch (error) {
-                  console.error('خطأ في getMaybeMeUser:', error);
-                  return null;
-                }
-              };
+            if (!window.WAPI) {
+              window.WAPI = {};
             }
             
+            window.WAPI.getMaybeMeUser = function() {
+              try {
+                // طريقة 1: Store.Conn.me (الأساسية)
+                if (window.Store && window.Store.Conn && window.Store.Conn.me) {
+                  return window.Store.Conn.me;
+                }
+                
+                // طريقة 2: Store.Me (v5.3.0)
+                if (window.Store && window.Store.Me) {
+                  return window.Store.Me;
+                }
+                
+                // طريقة 3: Store.User.me
+                if (window.Store && window.Store.User && window.Store.User.me) {
+                  return window.Store.User.me;
+                }
+                
+                // طريقة 4: Store.UserConstructor
+                if (window.Store && window.Store.UserConstructor && window.Store.UserConstructor.me) {
+                  return window.Store.UserConstructor.me;
+                }
+                
+                // طريقة 5: البحث في modules (v5.3.0)
+                if (window.require && window.require.cache) {
+                  for (const moduleId in window.require.cache) {
+                    try {
+                      const module = window.require.cache[moduleId];
+                      if (module && module.exports && module.exports.me) {
+                        return module.exports.me;
+                      }
+                    } catch (e) {
+                      // تجاهل الأخطاء
+                    }
+                  }
+                }
+                
+                // طريقة 6: فحص localStorage
+                try {
+                  const waInfo = localStorage.getItem('WAInfo');
+                  if (waInfo) {
+                    const parsed = JSON.parse(waInfo);
+                    if (parsed && parsed.wid) {
+                      return { id: parsed.wid, name: parsed.pushname };
+                    }
+                  }
+                } catch (e) {
+                  // تجاهل الأخطاء
+                }
+                
+                // طريقة 7: فحص window.me (v5.3.0)
+                if (window.me) {
+                  return window.me;
+                }
+                
+                // طريقة 8: فحص Store.Contact.me
+                if (window.Store && window.Store.Contact && window.Store.Contact.me) {
+                  return window.Store.Contact.me;
+                }
+                
+                console.log('⚠️ لم يتم العثور على بيانات المستخدم');
+                return null;
+              } catch (error) {
+                console.error('خطأ في getMaybeMeUser:', error);
+                return null;
+              }
+            };
+            
             // إصلاح 3: التأكد من sendMessage لـ v5.3.0
-            if (window.WAPI && typeof window.WAPI.sendMessage !== 'function') {
+            if (!window.WAPI.sendMessage) {
               console.log('🔧 إعادة تعريف sendMessage لـ v5.3.0...');
               
               window.WAPI.sendMessage = function(chatId, message) {
@@ -486,6 +521,8 @@ class WhatsAppService {
                           chat.sendMessage(message).then(resolve).catch(reject);
                         } else if (window.Store.SendMessage) {
                           window.Store.SendMessage(chat, message).then(resolve).catch(reject);
+                        } else if (window.Store.SendTextMessage) {
+                          window.Store.SendTextMessage(chat, message).then(resolve).catch(reject);
                         } else {
                           reject(new Error('SendMessage method not found'));
                         }
@@ -550,6 +587,42 @@ class WhatsAppService {
     } catch (error) {
       console.error('❌ خطأ في تطبيق إصلاحات v5.3.0:', error);
     }
+  }
+
+  startReadinessCheck() {
+    if (this.readinessCheckInterval) {
+      clearInterval(this.readinessCheckInterval);
+    }
+    
+    console.log('🔄 بدء فحص الجاهزية الدوري لـ v5.3.0...');
+    
+    this.readinessCheckInterval = setInterval(async () => {
+      if (this.isReady && this.wapiReady && this.getMaybeMeUserWorking) {
+        console.log('✅ النظام جاهز بالكامل - إيقاف الفحص الدوري');
+        clearInterval(this.readinessCheckInterval);
+        return;
+      }
+      
+      try {
+        const status = await this.checkFullReadinessWithV530Fix();
+        if (status.isFullyReady) {
+          this.storeReady = status.storeReady;
+          this.wapiReady = status.wapiReady;
+          this.isReady = status.wapiReady;
+          this.getMaybeMeUserWorking = status.getMaybeMeUserWorking;
+          
+          console.log('🎉 النظام أصبح جاهز بالكامل مع v5.3.0!');
+          clearInterval(this.readinessCheckInterval);
+        } else if (this.fixAttempts < this.maxFixAttempts) {
+          // تطبيق إصلاحات كل 30 ثانية
+          console.log('🔧 تطبيق إصلاحات دورية لـ v5.3.0...');
+          await this.applyV530GetMaybeMeUserFixes();
+          this.fixAttempts++;
+        }
+      } catch (error) {
+        console.error('❌ خطأ في الفحص الدوري:', error.message);
+      }
+    }, 10000); // فحص كل 10 ثواني
   }
 
   async ensureDirectories() {
@@ -646,42 +719,6 @@ class WhatsAppService {
     } else {
       console.log('ℹ️ حالة غير معروفة:', statusSession);
     }
-  }
-
-  startReadinessCheck() {
-    if (this.readinessCheckInterval) {
-      clearInterval(this.readinessCheckInterval);
-    }
-    
-    console.log('🔄 بدء فحص الجاهزية الدوري لـ v5.3.0...');
-    
-    this.readinessCheckInterval = setInterval(async () => {
-      if (this.isReady && this.wapiReady && this.getMaybeMeUserWorking) {
-        console.log('✅ النظام جاهز بالكامل - إيقاف الفحص الدوري');
-        clearInterval(this.readinessCheckInterval);
-        return;
-      }
-      
-      try {
-        const status = await this.checkFullReadinessWithV530Fix();
-        if (status.isFullyReady) {
-          this.storeReady = status.storeReady;
-          this.wapiReady = status.wapiReady;
-          this.isReady = status.wapiReady;
-          this.getMaybeMeUserWorking = status.getMaybeMeUserWorking;
-          
-          console.log('🎉 النظام أصبح جاهز بالكامل مع v5.3.0!');
-          clearInterval(this.readinessCheckInterval);
-        } else if (this.fixAttempts < this.maxFixAttempts) {
-          // تطبيق إصلاحات كل 30 ثانية
-          console.log('🔧 تطبيق إصلاحات دورية لـ v5.3.0...');
-          await this.applyV530GetMaybeMeUserFixes();
-          this.fixAttempts++;
-        }
-      } catch (error) {
-        console.error('❌ خطأ في الفحص الدوري:', error.message);
-      }
-    }, 10000); // فحص كل 10 ثواني
   }
 
   async setupEventHandlers() {
@@ -791,7 +828,7 @@ class WhatsAppService {
           
           // تأخير بين الرسائل
           if (i < messages.length - 1) {
-            const delay = parseInt(process.env.BULK_MESSAGE_DELAY) || 5000;
+            const delay = parseInt(process.env.BULK_MESSAGE_DELAY) || 7000;
             console.log(`⏳ انتظار ${delay/1000} ثانية قبل الرسالة التالية...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           }

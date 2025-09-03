@@ -2,7 +2,7 @@ const WhatsAppService = require('./services/whatsappService');
 
 async function ultimateTest() {
   console.log('🧪 الاختبار النهائي لـ venom v5.3.0...');
-  console.log('🎯 اختبار شامل لحل مشكلة getMaybeMeUser مع v5.3.0');
+  console.log('🎯 اختبار شامل لحل مشكلة getMaybeMeUser + WebSocket مع v5.3.0');
   
   const service = new WhatsAppService();
   

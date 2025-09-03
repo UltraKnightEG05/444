@@ -7,14 +7,14 @@ module.exports = {
   folderNameToken: process.env.TOKENS_PATH || './tokens',
   mkdirFolderToken: '',
 
-  // إعدادات محسنة لـ venom-bot v5.3.0
+  // إعدادات محسنة لـ venom-bot v5.3.0 مع إصلاح WebSocket
   headless: 'new',
   devtools: false,
   useChrome: true,
   debug: false,
   logQR: true,
 
-  // إعدادات خاصة لـ venom-bot v5.3.0
+  // إعدادات خاصة لـ venom-bot v5.3.0 مع إصلاحات WebSocket
   multidevice: true,
   disableSpins: true,
   disableWelcome: true,
@@ -25,14 +25,14 @@ module.exports = {
   catchQR: true,
   statusFind: true,
   
-  // إعدادات محسنة لـ v5.3.0
+  // إعدادات محسنة لـ v5.3.0 مع إصلاح WebSocket
   browserWS: {
     autoReconnect: true,
     reconnectInterval: 30000,
     maxReconnectAttempts: 10
   },
   
-  // إعدادات WAPI محسنة لـ v5.3.0
+  // إعدادات WAPI محسنة لـ v5.3.0 مع إصلاحات متقدمة
   wapiSettings: {
     waitForWapi: true,
     wapiTimeout: 300000,
@@ -43,16 +43,20 @@ module.exports = {
     enableStoreReady: true
   },
   
-  // إعدادات Puppeteer محسنة لـ v5.3.0
+  // إعدادات Puppeteer محسنة لـ v5.3.0 مع إصلاح WebSocket
   puppeteerOptions: {
     headless: 'new',
     executablePath: process.env.CHROME_PATH ||
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     defaultViewport: { width: 1366, height: 768 },
     ignoreHTTPSErrors: true,
+    ignoreDefaultArgs: ['--disable-extensions'],
     slowMo: 100,
     timeout: 300000,
     protocolTimeout: 300000,
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -110,7 +114,13 @@ module.exports = {
       '--force-fieldtrials=*BackgroundTracing/default/',
       '--disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider',
       '--aggressive-cache-discard',
-      '--enable-precise-memory-info'
+      '--enable-precise-memory-info',
+      // إصلاحات خاصة لـ WebSocket في v5.3.0
+      '--disable-web-security',
+      '--allow-running-insecure-content',
+      '--disable-site-isolation-trials',
+      '--disable-features=VizDisplayCompositor,VizHitTestSurfaceLayer',
+      '--remote-debugging-port=0'
     ]
   },
 
@@ -128,7 +138,7 @@ module.exports = {
   // إعدادات Cloudflare Tunnel
   tunnel: {
     enabled: process.env.ENABLE_TUNNEL === 'true',
-    tunnelId: process.env.TUNNEL_ID || '9752631e-8b0d-48a8-b9c1-20f376ce578f',
+    tunnelId: '9752631e-8b0d-48a8-b9c1-20f376ce578f',
     domain: process.env.TUNNEL_DOMAIN || 'api.go4host.net',
     tunnelName: process.env.TUNNEL_NAME || 'attendance-venom',
     autoStart: process.env.AUTO_START_TUNNEL === 'true'

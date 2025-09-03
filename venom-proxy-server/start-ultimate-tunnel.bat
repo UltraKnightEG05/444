@@ -6,7 +6,7 @@ echo.
 echo ================================================
 echo    Venom Proxy Ultimate v5.3.0
 echo    مع Cloudflare Tunnel التلقائي
-echo    حل نهائي لمشكلة getMaybeMeUser
+echo    حل نهائي لمشكلة getMaybeMeUser + WebSocket
 echo ================================================
 echo.
 
@@ -93,7 +93,7 @@ npm install venom-bot@5.3.0 puppeteer@23.8.0 --save
 
 echo.
 echo 🚀 تشغيل النظام الكامل مع v5.3.0...
-echo 🔧 مع الإصلاح النهائي لمشكلة getMaybeMeUser
+echo 🔧 مع الإصلاح النهائي لمشكلة getMaybeMeUser + WebSocket
 echo 🌍 مع Cloudflare Tunnel التلقائي
 echo 🆔 Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
 echo.

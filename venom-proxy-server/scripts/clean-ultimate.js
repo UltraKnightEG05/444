@@ -3,7 +3,7 @@ const { execSync } = require('child_process');
 
 async function ultimateClean() {
   console.log('🧹 التنظيف النهائي لـ venom v5.3.0...');
-  console.log('🎯 تنظيف شامل لحل مشكلة getMaybeMeUser');
+  console.log('🎯 تنظيف شامل لحل مشكلة getMaybeMeUser + WebSocket');
   
   try {
     // 1. إيقاف جميع العمليات
@@ -100,6 +100,15 @@ async function ultimateClean() {
           }
         }
       }
+    }
+    
+    // 6. تحديث المكتبات لـ v5.3.0
+    console.log('📦 تحديث المكتبات لـ v5.3.0...');
+    try {
+      execSync('npm install venom-bot@5.3.0 puppeteer@23.8.0 --save', { stdio: 'inherit' });
+      console.log('✅ تم تحديث المكتبات لـ v5.3.0');
+    } catch (error) {
+      console.log('⚠️ خطأ في تحديث المكتبات:', error.message);
     }
     
     console.log('✅ تم التنظيف النهائي بنجاح لـ v5.3.0');
