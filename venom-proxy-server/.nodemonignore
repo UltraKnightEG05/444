@@ -1,0 +1,12 @@
+tokens/
+logs/
+*.log
+*.json
+.env
+node_modules/
+backups/
+temp/
+cache/
+session/
+.wwebjs_auth/
+.wwebjs_cache/

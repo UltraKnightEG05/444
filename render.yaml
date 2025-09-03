@@ -1,0 +1,42 @@
+# Render Blueprint للنشر التلقائي
+services:
+  # Backend Service
+  - type: web
+    name: attendance-system-backend
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        value: srv1695.hstgr.io
+      - key: DB_USER
+        value: u723596365_HossamStudent
+      - key: DB_PASSWORD
+        value: h?9a[ssGJrO
+      - key: DB_NAME
+        value: u723596365_HossamStudent
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: WHATSAPP_SESSION_NAME
+        value: attendance-system
+      - key: WHATSAPP_HEADLESS
+        value: true
+      - key: WHATSAPP_DEBUG
+        value: false
+      - key: CHROME_PATH
+        value: /usr/bin/google-chrome
+    
+  # Frontend Service
+  - type: web
+    name: attendance-system-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://attendance-system-backend.onrender.com/api

@@ -1,0 +1,12 @@
+C:\Users\<اسم المستخدم>\.cloudflared\
+CMD//
+cloudflared tunnel run api
+--------
+cd venom-proxy-server
+npm install
+npm run setup
+npm run install-chrome  # تثبيت Chrome إذا لم يكن موجوداً
+
+
+npm run start:tunnel
+
