@@ -1,13 +1,88 @@
 import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
+import { MessageTemplatesEditor } from './MessageTemplatesEditor';
 import { MessageSquare, Send, Settings, Eye, Edit, Trash2, Plus, Users, Wifi, WifiOff } from 'lucide-react';
 
 // تعريف قوالب الرسائل الافتراضية
 const messageTemplates = {
-  absence: 'عزيزي ولي الأمر، نود إعلامكم بأن الطالب/ة {studentName} كان غائباً في جلسة {className} بتاريخ {date}. نرجو المتابعة.',
-  performance: 'عزيزي ولي الأمر، تقرير أداء الطالب/ة {studentName} في جلسة {className}: تقييم المعلم: {rating}/5، درجة التسميع: {recitationScore}/10، المشاركة: {participation}/5، الواجب: {homework}',
-  reminder: 'تذكير: لديكم جلسة {className} غداً في تمام الساعة {time}. نتطلع لحضور الطالب/ة {studentName}',
-  announcement: 'إعلان مهم: {message}'
+  absence: `🔔 تنبيه غياب - نظام إدارة الحضور
+
+السلام عليكم ورحمة الله وبركاته
+عزيزي ولي الأمر المحترم،
+
+نود إعلامكم بأن الطالب/ة: {studentName}
+تغيب عن حصة اليوم
+
+📚 تفاصيل الحصة:
+• المادة: {subjectName}
+• المجموعة: {className}
+• المعلم: {teacherName}
+• التاريخ: {date}
+• الوقت: {time}
+• المكان: {locationName}
+
+نرجو المتابعة والتواصل مع إدارة المدرسة لمعرفة سبب الغياب.
+
+📞 للاستفسار: اتصل بإدارة المدرسة
+
+📚 نظام إدارة الحضور
+تطوير: Ahmed Hosny - 01272774494`,
+
+  performance: `📊 تقرير أداء الطالب - نظام إدارة الحضور
+
+السلام عليكم ورحمة الله وبركاته
+عزيزي ولي الأمر المحترم،
+
+👤 الطالب/ة: {studentName}
+📚 المادة: {subjectName}
+🏫 المجموعة: {className}
+👨‍🏫 المعلم: {teacherName}
+📅 التاريخ: {date}
+
+📈 تقييم الأداء:
+⭐ تقييم المعلم: {rating}/5
+📖 درجة التسميع: {recitationScore}/10
+📋 درجة الاختبار: {quizScore}%
+🙋 المشاركة: {participation}/5
+😊 السلوك: {behavior}
+📝 الواجب: {homework}
+
+💬 ملاحظات المعلم:
+{comments}
+
+📚 نظام إدارة الحضور
+شكراً لمتابعتكم المستمرة 🌟
+تطوير: Ahmed Hosny - 01272774494`,
+
+  reminder: `⏰ تذكير بموعد الحصة - نظام إدارة الحضور
+
+السلام عليكم ورحمة الله وبركاته
+عزيزي ولي الأمر المحترم،
+
+تذكير بموعد حصة غداً:
+
+👤 الطالب/ة: {studentName}
+📚 المادة: {subjectName}
+🏫 المجموعة: {className}
+👨‍🏫 المعلم: {teacherName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+📍 المكان: {locationName}
+
+نتطلع لحضور الطالب/ة في الموعد المحدد.
+
+📚 نظام إدارة الحضور
+تطوير: Ahmed Hosny - 01272774494`,
+
+  announcement: `📢 إعلان مهم - نظام إدارة الحضور
+
+السلام عليكم ورحمة الله وبركاته
+عزيزي ولي الأمر المحترم،
+
+{message}
+
+📚 نظام إدارة الحضور
+تطوير: Ahmed Hosny - 01272774494`
 };
 
 export const WhatsAppManagement: React.FC = () => {
@@ -537,81 +612,7 @@ export const WhatsAppManagement: React.FC = () => {
           )}
 
           {activeTab === 'templates' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">قوالب الرسائل</h3>
-                <div className="flex space-x-2 space-x-reverse">
-                  <button
-                    onClick={() => {
-                      setCustomTemplates(messageTemplates);
-                      localStorage.setItem('whatsapp_templates', JSON.stringify(messageTemplates));
-                    }}
-                    className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-200 flex items-center"
-                  >
-                    استعادة الافتراضي
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {Object.entries(customTemplates).map(([type, template]) => (
-                  <div key={type} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">{getMessageTypeText(type)}</h4>
-                      <div className="flex space-x-2 space-x-reverse">
-                        <button 
-                          onClick={() => setEditingTemplate(type)}
-                          className="text-green-600 hover:text-green-900 p-1" 
-                          title="تعديل"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {editingTemplate === type ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={template}
-                          onChange={(e) => setCustomTemplates({
-                            ...customTemplates,
-                            [type]: e.target.value
-                          })}
-                          rows={4}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                        <div className="flex space-x-2 space-x-reverse">
-                          <button
-                            onClick={() => handleSaveTemplate(type, customTemplates[type as keyof typeof customTemplates])}
-                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                          >
-                            حفظ
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingTemplate(null);
-                              setCustomTemplates({
-                                ...customTemplates,
-                                [type]: template
-                              });
-                            }}
-                            className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
-                          >
-                            إلغاء
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-gray-600 whitespace-pre-wrap">{template}</p>
-                        <div className="mt-2 text-xs text-gray-500">
-                          المتغيرات المتاحة: {'{studentName}'}, {'{className}'}, {'{date}'}, {'{time}'}, {'{rating}'}, {'{participation}'}, {'{homework}'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <MessageTemplatesEditor />
           )}
         </div>
       </div>
