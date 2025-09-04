@@ -1412,9 +1412,9 @@ router.post('/whatsapp/send-session-report', async (req, res) => {
   } catch (error) {
     console.error('خطأ في إرسال تقرير الحصة:', error);
     
-     message: error.message || 'فشل في إرسال التقرير'
+    res.status(500).json({
       success: false, 
-      message: 'خطأ في إرسال تقرير الحصة: ' + error.message 
+      message: error.message || 'فشل في إرسال التقرير'
     });
   }
 });
@@ -1533,7 +1533,6 @@ router.get('/whatsapp/info', async (req, res) => {
     });
   }
 });
-module.exports = router;
 
 // إضافة endpoint لاختبار الرسائل
 router.post('/whatsapp/test-message', async (req, res) => {
@@ -1570,3 +1569,5 @@ router.post('/whatsapp/test-message', async (req, res) => {
     });
   }
 });
+
+module.exports = router;
