@@ -79,15 +79,8 @@ class TunnelManager {
       this.whatsappProcess.stdout.on('data', (data) => {
         const output = data.toString();
         
-        // فلترة الرسائل المهمة فقط
-        if (output.includes('تم تشغيل WhatsApp Proxy Server بنجاح') ||
-            output.includes('QR Code جديد') ||
-            output.includes('تم التحقق من الهوية') ||
-            output.includes('جاهز بالكامل') ||
-            output.includes('✅') ||
-            output.includes('🎉')) {
-          console.log(output.trim());
-        }
+        // عرض جميع الرسائل المهمة
+        console.log(output.trim());
         
         // التحقق من جاهزية الخادم
         if (output.includes('تم تشغيل WhatsApp Proxy Server بنجاح') && !serverReady) {
@@ -96,10 +89,15 @@ class TunnelManager {
           resolve();
         }
         
-        // عرض QR Code
-        if (output.includes('QR Code جديد') && !qrCodeShown) {
+        // فتح المتصفح عند ظهور QR Code
+        if (output.includes('تم إنشاء صفحة QR Code') && !qrCodeShown) {
           qrCodeShown = true;
-          console.log('📱 QR Code جديد - امسحه بهاتفك');
+          console.log('📱 QR Code جديد - سيفتح المتصفح تلقائياً');
+          
+          // فتح المتصفح بعد 5 ثواني
+          setTimeout(() => {
+            this.openQRInBrowser();
+          }, 5000);
         }
         
         // تأكيد الاتصال
@@ -202,6 +200,29 @@ class TunnelManager {
         }
       }, 30000);
     });
+  }
+
+  openQRInBrowser() {
+    try {
+      const { execSync } = require('child_process');
+      const qrURL = 'http://localhost:3002/qr';
+      
+      console.log('🌐 فتح QR Code في المتصفح...');
+      
+      if (process.platform === 'win32') {
+        execSync(`start ${qrURL}`, { stdio: 'ignore' });
+      } else if (process.platform === 'darwin') {
+        execSync(`open ${qrURL}`, { stdio: 'ignore' });
+      } else {
+        execSync(`xdg-open ${qrURL}`, { stdio: 'ignore' });
+      }
+      
+      console.log('✅ تم فتح QR Code في المتصفح');
+      
+    } catch (error) {
+      console.error('❌ خطأ في فتح المتصفح:', error.message);
+      console.log(`💡 افتح الرابط يدوياً: ${qrURL}`);
+    }
   }
 
   async start() {

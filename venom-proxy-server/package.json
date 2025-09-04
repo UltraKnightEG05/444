@@ -10,11 +10,9 @@
     "test:simple": "node scripts/test-connection-simple.js",
     "start:tunnel": "node scripts/start-with-tunnel-enhanced.js",
     "start:tunnel:ultimate": "node scripts/start-with-tunnel-enhanced.js",
-    "open:qr": "node scripts/open-qr-browser.js",
     "setup": "node scripts/setup.js",
     "clean": "node scripts/clean-ultimate.js",
-    "install-chrome": "node scripts/install-chrome.js",
-    "qr:browser": "node scripts/open-qr-browser.js"
+    "install-chrome": "node scripts/install-chrome.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",

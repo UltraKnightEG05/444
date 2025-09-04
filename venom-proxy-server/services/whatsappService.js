@@ -186,32 +186,41 @@ class WhatsAppService {
     // عند ظهور QR Code
     this.client.on('qr', (qr) => {
       console.log('\n📱 QR Code جديد - امسحه بهاتفك:');
+      console.log('🔗 QR Code Data:', qr.substring(0, 50) + '...');
       
       // عرض QR Code في Terminal مع إعدادات محسنة للـ PowerShell
       try {
-        qrcode.generate(qr, { 
-          small: true,
-          errorCorrectionLevel: 'M'
-        });
+        console.log('\n📱 محاولة عرض QR Code في Terminal...');
+        qrcode.generate(qr, { small: true });
+        console.log('\n✅ تم عرض QR Code أعلاه');
       } catch (terminalError) {
-        console.log('⚠️ لا يمكن عرض QR Code في Terminal');
-        console.log('🔗 QR Code URL:', qr);
+        console.log('⚠️ لا يمكن عرض QR Code في PowerShell');
+        console.log('💡 استخدم الطرق البديلة أدناه');
       }
       
       this.qrCode = qr;
       this.saveQRCode(qr).then(() => {
         console.log('💾 تم حفظ QR Code كصورة في مجلد logs');
-        console.log('📂 يمكنك فتح الصورة ومسحها بهاتفك');
+        console.log('📂 افتح: logs/latest-qr-code.png');
       });
       
       // إنشاء QR Code كـ HTML للعرض في المتصفح
-      this.createQRCodeHTML(qr);
+      this.createQRCodeHTML(qr).then(() => {
+        console.log('🌐 تم إنشاء صفحة QR Code: http://localhost:3002/qr');
+        
+        // فتح المتصفح تلقائياً بعد 3 ثواني
+        setTimeout(() => {
+          this.openQRInBrowser();
+        }, 3000);
+      });
       
       console.log('\n📋 خطوات المسح:');
       console.log('1. افتح واتساب على هاتفك');
       console.log('2. اذهب إلى: الإعدادات > الأجهزة المرتبطة');
       console.log('3. اضغط على "ربط جهاز"');
-      console.log('4. امسح QR Code من الصورة المحفوظة أو افتح http://localhost:3002/qr');
+      console.log('4. امسح QR Code من:');
+      console.log('   • المتصفح: http://localhost:3002/qr (سيفتح تلقائياً)');
+      console.log('   • الصورة: logs/latest-qr-code.png');
       console.log('5. انتظر رسالة التأكيد\n');
     });
 
@@ -645,6 +654,7 @@ class WhatsAppService {
     <title>QR Code - نظام الحضور</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="30">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -664,6 +674,11 @@ class WhatsAppService {
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             max-width: 600px;
         }
+        .title {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
         .qr-code {
             margin: 20px 0;
             border: 3px solid #f0f0f0;
@@ -674,6 +689,7 @@ class WhatsAppService {
         .qr-code img {
             max-width: 100%;
             height: auto;
+            border-radius: 10px;
         }
         .instructions {
             background: #e3f2fd;
@@ -688,6 +704,7 @@ class WhatsAppService {
             background: white;
             border-radius: 8px;
             border-right: 4px solid #2196f3;
+            font-size: 16px;
         }
         .status {
             background: #4caf50;
@@ -696,6 +713,8 @@ class WhatsAppService {
             border-radius: 25px;
             display: inline-block;
             margin: 10px 0;
+            font-size: 18px;
+            font-weight: bold;
         }
         .refresh-btn {
             background: #2196f3;
@@ -706,16 +725,37 @@ class WhatsAppService {
             cursor: pointer;
             font-size: 16px;
             margin: 10px;
+            transition: background 0.3s;
         }
         .refresh-btn:hover {
             background: #1976d2;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #155724;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔗 ربط واتساب - نظام الحضور</h1>
+        <h1 class="title">🔗 ربط واتساب - نظام الحضور</h1>
         <div class="status">✅ WhatsApp-Web.js جاهز للربط</div>
+        
+        <div class="warning">
+            <strong>⚠️ مهم:</strong> لا تفتح WhatsApp Web في متصفح آخر أثناء الربط
+        </div>
         
         <div class="qr-code">
             <img src="${qrDataURL}" alt="QR Code" />
@@ -730,26 +770,31 @@ class WhatsAppService {
             <div class="step">5️⃣ انتظر رسالة التأكيد</div>
         </div>
         
+        <div class="success">
+            <strong>💡 نصيحة:</strong> إذا لم يعمل المسح، اضغط "تحديث QR Code" أدناه
+        </div>
+        
         <button class="refresh-btn" onclick="window.location.reload()">🔄 تحديث QR Code</button>
         <button class="refresh-btn" onclick="checkStatus()">📊 فحص الحالة</button>
+        <button class="refresh-btn" onclick="window.open('logs/latest-qr-code.png')">🖼️ فتح الصورة</button>
         
         <p><strong>📱 الوقت:</strong> ${new Date().toLocaleString('ar-EG')}</p>
         <p><strong>🌐 الخادم:</strong> http://localhost:3002</p>
+        <p><strong>🌍 Tunnel:</strong> https://api.go4host.net</p>
     </div>
     
     <script>
-        // تحديث تلقائي كل 30 ثانية
+        // تحديث تلقائي كل 45 ثانية
         setTimeout(() => {
             window.location.reload();
-        }, 30000);
+        }, 45000);
         
         function checkStatus() {
             fetch('/api/whatsapp/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.data.connected && data.data.ready) {
-                        alert('✅ تم الربط بنجاح! يمكنك إغلاق هذه النافذة.');
-                        window.close();
+                        document.body.innerHTML = '<div style="text-align:center;padding:50px;background:#d4edda;color:#155724;font-size:24px;"><h1>🎉 تم الربط بنجاح!</h1><p>يمكنك إغلاق هذه النافذة والعودة للنظام</p></div>';
                     } else {
                         alert('⏳ لا يزال في انتظار المسح...');
                     }
@@ -758,6 +803,17 @@ class WhatsAppService {
                     alert('❌ خطأ في فحص الحالة');
                 });
         }
+        
+        // فحص تلقائي كل 10 ثواني
+        setInterval(() => {
+            fetch('/api/whatsapp/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.data.connected && data.data.ready) {
+                        document.body.innerHTML = '<div style="text-align:center;padding:50px;background:#d4edda;color:#155724;font-size:24px;"><h1>🎉 تم الربط بنجاح!</h1><p>يمكنك إغلاق هذه النافذة والعودة للنظام</p><button onclick="window.close()" style="padding:10px 20px;font-size:16px;background:#28a745;color:white;border:none;border-radius:5px;cursor:pointer;">إغلاق النافذة</button></div>';
+                    }
+                });
+        }, 10000);
     </script>
 </body>
 </html>`;
@@ -767,6 +823,30 @@ class WhatsAppService {
       
     } catch (error) {
       console.error('❌ خطأ في إنشاء QR Code HTML:', error.message);
+    }
+  }
+
+  openQRInBrowser() {
+    try {
+      const { execSync } = require('child_process');
+      const qrURL = 'http://localhost:3002/qr';
+      
+      console.log('🌐 فتح QR Code في المتصفح...');
+      
+      if (process.platform === 'win32') {
+        execSync(`start ${qrURL}`, { stdio: 'ignore' });
+      } else if (process.platform === 'darwin') {
+        execSync(`open ${qrURL}`, { stdio: 'ignore' });
+      } else {
+        execSync(`xdg-open ${qrURL}`, { stdio: 'ignore' });
+      }
+      
+      console.log('✅ تم فتح QR Code في المتصفح');
+      console.log(`🔗 الرابط: ${qrURL}`);
+      
+    } catch (error) {
+      console.error('❌ خطأ في فتح المتصفح:', error.message);
+      console.log(`💡 افتح الرابط يدوياً: http://localhost:3002/qr`);
     }
   }
 }
