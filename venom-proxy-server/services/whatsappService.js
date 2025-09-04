@@ -840,7 +840,7 @@ class WhatsAppService {
       console.log('🌐 فتح QR Code في المتصفح...');
       
       if (process.platform === 'win32') {
-        execSync(`start ${qrURL}`, { stdio: 'ignore' });
+        execSync(`start "" "${qrURL}"`, { stdio: 'ignore' });
       } else if (process.platform === 'darwin') {
         execSync(`open ${qrURL}`, { stdio: 'ignore' });
       } else {
