@@ -33,7 +33,7 @@ export const WhatsAppManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/whatsapp/test-message`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/whatsapp/test-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export const WhatsAppManagement: React.FC = () => {
     try {
       console.log('🚀 بدء تهيئة الواتساب...');
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/whatsapp/initialize`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/whatsapp/initialize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,21 +135,21 @@ export const WhatsAppManagement: React.FC = () => {
         setConnectionStatus(true);
         
         if (result.alreadyConnected) {
-          alert('✅ الواتساب متصل بالفعل ويعمل بشكل صحيح!');
+          alert('✅ WhatsApp-Web.js متصل بالفعل ويعمل بشكل صحيح!');
         } else {
-          alert('✅ تم تهيئة الواتساب بنجاح! يمكنك الآن إرسال الرسائل.');
+          alert('✅ تم تهيئة WhatsApp-Web.js بنجاح! يمكنك الآن إرسال الرسائل.');
         }
         
         // تحديث حالة الاتصال كل 10 ثواني
         const statusInterval = setInterval(async () => {
           try {
-            const statusResponse = await fetch(`${import.meta.env.VITE_API_URL}/whatsapp/status`);
+            const statusResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/whatsapp/status`);
             const statusResult = await statusResponse.json();
-            const isConnected = statusResult.data.connected;
+            const isConnected = statusResult.data.connected && statusResult.data.ready;
             setConnectionStatus(isConnected);
             
             if (!isConnected) {
-              console.log('⚠️ فقد الاتصال بالواتساب');
+              console.log('⚠️ فقد الاتصال بـ WhatsApp-Web.js');
               clearInterval(statusInterval);
             }
           } catch (error) {
@@ -159,11 +159,11 @@ export const WhatsAppManagement: React.FC = () => {
           }
         }, 10000);
       } else {
-        alert(`❌ فشل في تهيئة الواتساب: ${result.message}`);
+        alert(`❌ فشل في تهيئة WhatsApp-Web.js: ${result.message}`);
       }
     } catch (error: any) {
-      console.error('خطأ في تهيئة الواتساب:', error);
-      alert('❌ حدث خطأ أثناء تهيئة الواتساب: ' + error.message);
+      console.error('خطأ في تهيئة WhatsApp-Web.js:', error);
+      alert('❌ حدث خطأ أثناء تهيئة WhatsApp-Web.js: ' + error.message);
     } finally {
       setIsConnecting(false);
     }
@@ -361,9 +361,9 @@ export const WhatsAppManagement: React.FC = () => {
           {activeTab === 'test' && (
             <div className="space-y-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="text-lg font-medium text-blue-900 mb-2">اختبار إرسال الرسائل</h3>
+                <h3 className="text-lg font-medium text-blue-900 mb-2">اختبار WhatsApp-Web.js</h3>
                 <p className="text-sm text-blue-700">
-                  استخدم هذه الأداة لاختبار إرسال رسالة إلى رقم واحد للتأكد من عمل النظام قبل إرسال التقارير الكاملة. الاختبار متاح دائماً حتى لو لم يظهر الاتصال.
+                  استخدم هذه الأداة لاختبار إرسال رسالة إلى رقم واحد للتأكد من عمل WhatsApp-Web.js قبل إرسال التقارير الكاملة.
                 </p>
               </div>
               
@@ -396,15 +396,15 @@ export const WhatsAppManagement: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    حالة الاتصال
+                    حالة WhatsApp-Web.js
                   </label>
                   <div className={`px-3 py-2 rounded-md border ${
                     connectionStatus || forceTestEnabled
                       ? 'bg-green-50 border-green-200 text-green-800' 
                       : 'bg-red-50 border-red-200 text-red-800'
                   }`}>
-                    {connectionStatus ? '✅ متصل وجاهز للإرسال' : 
-                     forceTestEnabled ? '🧪 جاهز للاختبار (قد يكون متصل عبر CMD)' : '❌ غير متصل'}
+                    {connectionStatus ? '✅ WhatsApp-Web.js متصل وجاهز للإرسال' : 
+                     forceTestEnabled ? '🧪 جاهز للاختبار (تأكد من تشغيل start-whatsapp-web-js.bat)' : '❌ غير متصل'}
                   </div>
                 </div>
               </div>
@@ -438,10 +438,10 @@ export const WhatsAppManagement: React.FC = () => {
                 <ul className="text-sm text-yellow-800 space-y-1">
                   <li>• استخدم رقمك الشخصي أولاً للاختبار</li>
                   <li>• تأكد من أن الرقم مكتوب بنفس التنسيق المخزن في قاعدة البيانات</li>
-                  <li>• إذا كان الواتساب يعمل عبر CMD، فالاختبار سيعمل حتى لو لم تظهر حالة الاتصال</li>
-                  <li>• إذا فشل الاختبار، تحقق من تشغيل الواتساب في الطرفية أو أعد التهيئة</li>
+                  <li>• تأكد من تشغيل start-whatsapp-web-js.bat على جهازك الشخصي</li>
+                  <li>• إذا فشل الاختبار، تحقق من مسح QR Code أو أعد التهيئة</li>
                   <li>• انتظر بضع ثواني بين كل اختبار وآخر</li>
-                  <li>• يمكنك استخدام الاختبار حتى لو ظهرت حالة "غير متصل" في حال كان يعمل عبر CMD</li>
+                  <li>• تأكد من ظهور "WhatsApp Web جاهز بالكامل" في Terminal</li>
                 </ul>
               </div>
             </div>
