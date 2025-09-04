@@ -72,6 +72,35 @@ const authenticateAPI = (req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// تقديم QR Code كصفحة ويب
+app.get('/qr', (req, res) => {
+  const qrPath = path.join(__dirname, 'logs', 'qr-code.html');
+  if (fs.existsSync(qrPath)) {
+    res.sendFile(qrPath);
+  } else {
+    res.send(`
+      <html dir="rtl">
+        <head><title>QR Code - نظام الحضور</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>⏳ انتظار QR Code...</h1>
+          <p>QR Code لم يتم إنشاؤه بعد. يرجى الانتظار...</p>
+          <button onclick="window.location.reload()">🔄 تحديث</button>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// تقديم صور QR Code
+app.get('/qr-image', (req, res) => {
+  const qrPath = path.join(__dirname, 'logs', 'latest-qr-code.png');
+  if (fs.existsSync(qrPath)) {
+    res.sendFile(qrPath);
+  } else {
+    res.status(404).send('QR Code غير متاح');
+  }
+});
+
 // إنشاء خدمة الواتساب
 const whatsappService = new WhatsAppService();
 

@@ -186,16 +186,32 @@ class WhatsAppService {
     // عند ظهور QR Code
     this.client.on('qr', (qr) => {
       console.log('\n📱 QR Code جديد - امسحه بهاتفك:');
-      qrcode.generate(qr, { small: true });
+      
+      // عرض QR Code في Terminal مع إعدادات محسنة للـ PowerShell
+      try {
+        qrcode.generate(qr, { 
+          small: true,
+          errorCorrectionLevel: 'M'
+        });
+      } catch (terminalError) {
+        console.log('⚠️ لا يمكن عرض QR Code في Terminal');
+        console.log('🔗 QR Code URL:', qr);
+      }
       
       this.qrCode = qr;
-      this.saveQRCode(qr);
+      this.saveQRCode(qr).then(() => {
+        console.log('💾 تم حفظ QR Code كصورة في مجلد logs');
+        console.log('📂 يمكنك فتح الصورة ومسحها بهاتفك');
+      });
+      
+      // إنشاء QR Code كـ HTML للعرض في المتصفح
+      this.createQRCodeHTML(qr);
       
       console.log('\n📋 خطوات المسح:');
       console.log('1. افتح واتساب على هاتفك');
       console.log('2. اذهب إلى: الإعدادات > الأجهزة المرتبطة');
       console.log('3. اضغط على "ربط جهاز"');
-      console.log('4. امسح QR Code أعلاه');
+      console.log('4. امسح QR Code من الصورة المحفوظة أو افتح http://localhost:3002/qr');
       console.log('5. انتظر رسالة التأكيد\n');
     });
 
@@ -439,8 +455,27 @@ class WhatsAppService {
     try {
       const qrPath = path.join('./logs', `qr-code-${Date.now()}.png`);
       const QRCode = require('qrcode');
-      await QRCode.toFile(qrPath, qr);
+      await QRCode.toFile(qrPath, qr, {
+        width: 512,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
       console.log(`💾 تم حفظ QR Code في: ${qrPath}`);
+      
+      // حفظ آخر QR Code للعرض في المتصفح
+      const latestQRPath = path.join('./logs', 'latest-qr-code.png');
+      await QRCode.toFile(latestQRPath, qr, {
+        width: 512,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
     } catch (error) {
       console.error('❌ خطأ في حفظ QR Code:', error.message);
     }
@@ -588,6 +623,150 @@ class WhatsAppService {
     } catch (error) {
       console.error('❌ خطأ في جلب معلومات الحساب:', error.message);
       return null;
+    }
+  }
+
+  async createQRCodeHTML(qr) {
+    try {
+      const QRCode = require('qrcode');
+      const qrDataURL = await QRCode.toDataURL(qr, {
+        width: 512,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <title>QR Code - نظام الحضور</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+        .qr-code {
+            margin: 20px 0;
+            border: 3px solid #f0f0f0;
+            border-radius: 15px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        .qr-code img {
+            max-width: 100%;
+            height: auto;
+        }
+        .instructions {
+            background: #e3f2fd;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: right;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-right: 4px solid #2196f3;
+        }
+        .status {
+            background: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .refresh-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .refresh-btn:hover {
+            background: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 ربط واتساب - نظام الحضور</h1>
+        <div class="status">✅ WhatsApp-Web.js جاهز للربط</div>
+        
+        <div class="qr-code">
+            <img src="${qrDataURL}" alt="QR Code" />
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 خطوات الربط:</h3>
+            <div class="step">1️⃣ افتح واتساب على هاتفك</div>
+            <div class="step">2️⃣ اذهب إلى: الإعدادات ← الأجهزة المرتبطة</div>
+            <div class="step">3️⃣ اضغط على "ربط جهاز"</div>
+            <div class="step">4️⃣ امسح QR Code أعلاه</div>
+            <div class="step">5️⃣ انتظر رسالة التأكيد</div>
+        </div>
+        
+        <button class="refresh-btn" onclick="window.location.reload()">🔄 تحديث QR Code</button>
+        <button class="refresh-btn" onclick="checkStatus()">📊 فحص الحالة</button>
+        
+        <p><strong>📱 الوقت:</strong> ${new Date().toLocaleString('ar-EG')}</p>
+        <p><strong>🌐 الخادم:</strong> http://localhost:3002</p>
+    </div>
+    
+    <script>
+        // تحديث تلقائي كل 30 ثانية
+        setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+        
+        function checkStatus() {
+            fetch('/api/whatsapp/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.data.connected && data.data.ready) {
+                        alert('✅ تم الربط بنجاح! يمكنك إغلاق هذه النافذة.');
+                        window.close();
+                    } else {
+                        alert('⏳ لا يزال في انتظار المسح...');
+                    }
+                })
+                .catch(error => {
+                    alert('❌ خطأ في فحص الحالة');
+                });
+        }
+    </script>
+</body>
+</html>`;
+      
+      await fs.writeFile('./logs/qr-code.html', htmlContent);
+      console.log('🌐 تم إنشاء صفحة QR Code: http://localhost:3002/qr');
+      
+    } catch (error) {
+      console.error('❌ خطأ في إنشاء QR Code HTML:', error.message);
     }
   }
 }

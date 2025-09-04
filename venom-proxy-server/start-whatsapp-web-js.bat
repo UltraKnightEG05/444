@@ -101,13 +101,20 @@ echo 🌍 مع Cloudflare Tunnel التلقائي
 echo 🆔 Tunnel ID: 9752631e-8b0d-48a8-b9c1-20f376ce578f
 echo.
 echo ⏳ انتظر ظهور QR Code (خلال دقيقة واحدة)
-echo 📱 امسح QR Code بهاتفك عند ظهوره
+echo 📱 إذا لم يظهر QR Code في Terminal، افتح: http://localhost:3002/qr
+echo 🌐 أو افتح الصورة المحفوظة في مجلد logs
 echo 🌍 الخادم سيكون متاح على: https://api.go4host.net
 echo 🏠 والمحلي على: http://localhost:3002
 echo.
+echo 📋 طرق عرض QR Code:
+echo    1. Terminal (إذا ظهر)
+echo    2. المتصفح: http://localhost:3002/qr
+echo    3. الصورة: logs\latest-qr-code.png
+echo.
 
 REM تشغيل النظام مع Tunnel
-npm run start:tunnel
+start /B npm run qr:browser
+npm run start:tunnel:ultimate
 
 echo.
 echo 🛑 تم إيقاف النظام
