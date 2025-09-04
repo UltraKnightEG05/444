@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 async function testSimpleConnection() {
-  console.log('🧪 اختبار اتصال بسيط...');
+  console.log('🧪 اختبار اتصال WhatsApp-Web.js...');
   
   const API_BASE_URL = 'http://localhost:3002/api';
   const API_KEY = 'venom-ultimate-fix-2024';
@@ -11,14 +11,26 @@ async function testSimpleConnection() {
     console.log('1️⃣ فحص حالة الخادم...');
     const testResponse = await axios.get(`${API_BASE_URL}/test`);
     console.log('✅ الخادم يعمل:', testResponse.data.message);
+    console.log('📱 الخدمة:', testResponse.data.service);
     
-    // اختبار 2: فحص حالة الواتساب
-    console.log('2️⃣ فحص حالة الواتساب...');
+    // اختبار 2: فحص حالة WhatsApp
+    console.log('2️⃣ فحص حالة WhatsApp...');
     const statusResponse = await axios.get(`${API_BASE_URL}/whatsapp/status`);
-    console.log('📊 حالة الواتساب:', statusResponse.data.data);
+    console.log('📊 حالة WhatsApp:', statusResponse.data.data);
     
     if (statusResponse.data.data.connected && statusResponse.data.data.ready) {
-      console.log('🎉 الواتساب متصل وجاهز للإرسال!');
+      console.log('🎉 WhatsApp متصل وجاهز للإرسال!');
+      
+      // اختبار 2.5: جلب معلومات الحساب
+      console.log('2️⃣.5️⃣ جلب معلومات الحساب...');
+      try {
+        const infoResponse = await axios.get(`${API_BASE_URL}/whatsapp/info`, {
+          headers: { 'X-API-Key': API_KEY }
+        });
+        console.log('👤 معلومات الحساب:', infoResponse.data.data);
+      } catch (infoError) {
+        console.log('⚠️ لم يتم جلب معلومات الحساب:', infoError.response?.data?.message);
+      }
       
       // اختبار 3: إرسال رسالة اختبار
       const testPhone = '201002246668';
@@ -26,20 +38,20 @@ async function testSimpleConnection() {
       
       const messageResponse = await axios.post(`${API_BASE_URL}/whatsapp/test-message`, {
         phoneNumber: testPhone,
-        message: '🎉 تم حل جميع مشاكل venom v5.3.0!\n\nالنظام يعمل بشكل مثالي الآن.\n\nالوقت: ' + new Date().toLocaleString('en-GB')
+        message: '🎉 تم التحويل إلى WhatsApp-Web.js بنجاح!\n\nالنظام يعمل بشكل مثالي بدون مشاكل.\n\nالوقت: ' + new Date().toLocaleString('en-GB')
       }, {
         headers: { 'X-API-Key': API_KEY }
       });
       
       if (messageResponse.data.success) {
         console.log('🎉🎉🎉 تم إرسال رسالة الاختبار بنجاح!');
-        console.log('✅✅✅ جميع المشاكل تم حلها!');
+        console.log('✅✅✅ WhatsApp-Web.js يعمل بشكل مثالي!');
         console.log('🚀 النظام جاهز للاستخدام الكامل');
       } else {
         console.error('❌ فشل في إرسال رسالة الاختبار:', messageResponse.data.message);
       }
     } else {
-      console.log('⏳ الواتساب متصل لكن لا يزال يحمل...');
+      console.log('⏳ WhatsApp متصل لكن لا يزال يحمل...');
       console.log('💡 انتظر قليلاً ثم أعد الاختبار');
     }
     
@@ -47,7 +59,7 @@ async function testSimpleConnection() {
     console.error('❌ خطأ في الاختبار:', error.response?.data?.message || error.message);
     
     if (error.code === 'ECONNREFUSED') {
-      console.log('💡 تأكد من تشغيل الخادم أولاً: npm run start:tunnel:ultimate');
+      console.log('💡 تأكد من تشغيل الخادم أولاً: start-whatsapp-web-js.bat');
     }
   }
 }

@@ -53,17 +53,17 @@ class TunnelManager {
 
   async startVenomProxy() {
     return new Promise((resolve, reject) => {
-      console.log('🚀 بدء تشغيل Venom Proxy v5.0.17 (مستقر)...');
+      console.log('🚀 بدء تشغيل WhatsApp-Web.js Proxy...');
       
-      // إعدادات البيئة المحسنة لـ v5.0.17
+      // إعدادات البيئة لـ WhatsApp-Web.js
       const env = {
         ...process.env,
         NODE_ENV: 'production',
-        WHATSAPP_HEADLESS: 'new',
+        WHATSAPP_HEADLESS: 'true',
         WHATSAPP_DEBUG: 'false',
         ENABLE_TUNNEL: 'true',
         AUTO_START_TUNNEL: 'true',
-        VENOM_VERSION: '5.0.17',
+        WHATSAPP_SERVICE: 'whatsapp-web.js',
         TUNNEL_ID: this.tunnelId
       };
       
@@ -80,9 +80,9 @@ class TunnelManager {
         const output = data.toString();
         
         // فلترة الرسائل المهمة فقط
-        if (output.includes('تم تشغيل Venom Proxy Server بنجاح') ||
+        if (output.includes('تم تشغيل WhatsApp Proxy Server بنجاح') ||
             output.includes('QR Code جديد') ||
-            output.includes('تم تسجيل الدخول') ||
+            output.includes('تم التحقق من الهوية') ||
             output.includes('جاهز بالكامل') ||
             output.includes('✅') ||
             output.includes('❌') ||
@@ -91,9 +91,9 @@ class TunnelManager {
         }
         
         // التحقق من جاهزية الخادم
-        if (output.includes('تم تشغيل Venom Proxy Server بنجاح') && !serverReady) {
+        if (output.includes('تم تشغيل WhatsApp Proxy Server بنجاح') && !serverReady) {
           serverReady = true;
-          console.log('✅ Venom Proxy v5.3.0 جاهز');
+          console.log('✅ WhatsApp-Web.js Proxy جاهز');
           resolve();
         }
         
@@ -104,62 +104,38 @@ class TunnelManager {
         }
         
         // تأكيد الاتصال
-        if (output.includes('النظام جاهز بالكامل')) {
-          console.log('🎉 Venom Proxy v5.3.0 جاهز بالكامل للإرسال!');
+        if (output.includes('WhatsApp Web جاهز بالكامل')) {
+          console.log('🎉 WhatsApp-Web.js جاهز بالكامل للإرسال!');
         }
       });
       
       this.venomProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
-        // فلترة الأخطاء - إخفاء الرسائل غير المهمة
-        if (!error.includes('Help Keep This Project Going') &&
-            !error.includes('Node.js version verified') &&
-            !error.includes('headless option is active') &&
-            !error.includes('Executable path browser') &&
-            !error.includes('Platform: win32') &&
-            !error.includes('Browser Version:') &&
-            !error.includes('Page successfully accessed') &&
-            !error.includes('waiting for introduction') &&
-            !error.includes('Successfully connected') &&
-            !error.includes('Successfully main page') &&
-            !error.includes('Checking QRCode status') &&
-            !error.includes('QRCode Success') &&
-            !error.includes('Checking phone is connected') &&
-            !error.includes('Connected') &&
-            !error.includes('opening main page')) {
-          
-          // عرض الأخطاء المهمة فقط
-          if (error.includes('Error:') || 
-              error.includes('❌') || 
-              error.includes('Failed') ||
-              error.includes('WebSocket') ||
-              error.includes('Invalid URL')) {
-            console.error('❌ Venom Error:', error.trim());
-          }
-        }
-        
-        if (error.includes('getMaybeMeUser')) {
-          console.log('🔧 تم اكتشاف مشكلة getMaybeMeUser - سيتم الإصلاح تلقائياً');
+        // عرض الأخطاء المهمة فقط
+        if (error.includes('Error:') || 
+            error.includes('❌') || 
+            error.includes('Failed')) {
+          console.error('❌ WhatsApp Error:', error.trim());
         }
       });
       
       this.venomProcess.on('error', (error) => {
-        console.error('❌ خطأ في تشغيل Venom Proxy:', error);
+        console.error('❌ خطأ في تشغيل WhatsApp Proxy:', error);
         reject(error);
       });
       
       this.venomProcess.on('exit', (code) => {
-        console.log(`🔴 Venom Proxy توقف بكود: ${code}`);
+        console.log(`🔴 WhatsApp Proxy توقف بكود: ${code}`);
         if (code !== 0 && !serverReady) {
-          reject(new Error(`Venom Proxy توقف بكود خطأ: ${code}`));
+          reject(new Error(`WhatsApp Proxy توقف بكود خطأ: ${code}`));
         }
       });
       
       // timeout للتأكد من بدء الخادم
       setTimeout(() => {
         if (!serverReady) {
-          console.log('✅ Venom Proxy v5.3.0 بدأ (timeout)');
+          console.log('✅ WhatsApp-Web.js Proxy بدأ (timeout)');
           resolve();
         }
       }, 20000);

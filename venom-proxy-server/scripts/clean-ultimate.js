@@ -2,8 +2,8 @@ const fs = require('fs-extra');
 const { execSync } = require('child_process');
 
 async function ultimateClean() {
-  console.log('🧹 التنظيف النهائي لـ venom v5.3.0...');
-  console.log('🎯 تنظيف شامل لحل مشكلة getMaybeMeUser + WebSocket');
+  console.log('🧹 التنظيف النهائي لـ WhatsApp-Web.js...');
+  console.log('🎯 تنظيف شامل للجلسات والملفات المؤقتة');
   
   try {
     // 1. إيقاف جميع العمليات
@@ -31,21 +31,21 @@ async function ultimateClean() {
     
     await new Promise(resolve => setTimeout(resolve, 5000));
     
-    // 2. نسخ احتياطي للتوكن
-    console.log('💾 إنشاء نسخة احتياطية للتوكن...');
-    const tokensPath = './tokens';
-    const backupPath = `./backups/tokens_backup_v530_${Date.now()}`;
+    // 2. نسخ احتياطي للجلسات
+    console.log('💾 إنشاء نسخة احتياطية للجلسات...');
+    const sessionsPath = './sessions';
+    const backupPath = `./backups/sessions_backup_${Date.now()}`;
     
-    if (await fs.pathExists(tokensPath)) {
+    if (await fs.pathExists(sessionsPath)) {
       await fs.ensureDir('./backups');
-      await fs.copy(tokensPath, backupPath);
-      console.log(`✅ نسخة احتياطية في: ${backupPath}`);
+      await fs.copy(sessionsPath, backupPath);
+      console.log(`✅ نسخة احتياطية للجلسات في: ${backupPath}`);
     }
     
     // 3. تنظيف الملفات
     console.log('🗑️ تنظيف الملفات...');
     const cleanPaths = [
-      './tokens',
+      './sessions',
       './logs/*.log',
       './logs/qr-code-*',
       './temp',
@@ -73,7 +73,7 @@ async function ultimateClean() {
     }
     
     // 4. إعادة إنشاء المجلدات
-    await fs.ensureDir('./tokens');
+    await fs.ensureDir('./sessions');
     await fs.ensureDir('./logs');
     await fs.ensureDir('./backups');
     console.log('📁 تم إعادة إنشاء المجلدات');
@@ -102,22 +102,22 @@ async function ultimateClean() {
       }
     }
     
-    // 6. تحديث المكتبات لـ v5.3.0
-    console.log('📦 تحديث المكتبات لـ v5.3.0...');
+    // 6. تحديث المكتبات لـ WhatsApp-Web.js
+    console.log('📦 تحديث المكتبات لـ WhatsApp-Web.js...');
     try {
-      execSync('npm install venom-bot@5.3.0 puppeteer@23.8.0 --save', { stdio: 'inherit' });
-      console.log('✅ تم تحديث المكتبات لـ v5.3.0');
+      execSync('npm install whatsapp-web.js@1.23.0 qrcode-terminal@0.12.0 qrcode@1.5.3 --save', { stdio: 'inherit' });
+      console.log('✅ تم تحديث المكتبات لـ WhatsApp-Web.js');
     } catch (error) {
       console.log('⚠️ خطأ في تحديث المكتبات:', error.message);
     }
     
-    console.log('✅ تم التنظيف النهائي بنجاح لـ v5.3.0');
+    console.log('✅ تم التنظيف النهائي بنجاح لـ WhatsApp-Web.js');
     console.log('\n📋 الخطوات التالية:');
-    console.log('1. شغّل النظام: npm run start:tunnel:ultimate');
-    console.log('2. أو استخدم: start-ultimate-tunnel.bat');
+    console.log('1. شغّل النظام: start-whatsapp-web-js.bat');
+    console.log('2. أو استخدم: npm run start:tunnel:ultimate');
     console.log('3. انتظر ظهور QR Code');
     console.log('4. امسح QR Code بهاتفك');
-    console.log('5. انتظر رسالة "جاهز بالكامل للإرسال"');
+    console.log('5. انتظر رسالة "WhatsApp Web جاهز بالكامل"');
     
   } catch (error) {
     console.error('❌ خطأ في التنظيف:', error);
