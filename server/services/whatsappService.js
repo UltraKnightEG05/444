@@ -29,8 +29,23 @@ class WhatsAppService extends WhatsAppProxyService {
       
       // التحقق من حالة الاتصال
       const isConnected = await this.checkConnection();
+      console.log('🔍 نتيجة فحص الاتصال:', isConnected);
+      
       if (!isConnected) {
-        throw new Error('WhatsApp-Web.js Proxy غير متصل أو غير جاهز. تأكد من تشغيل start-whatsapp-web-js.bat على جهازك وأن QR Code تم مسحه.');
+        // محاولة فحص مفصل
+        try {
+          const detailedStatus = await this.getDetailedStatus();
+          console.log('📋 حالة مفصلة:', detailedStatus);
+          
+          if (detailedStatus.ready || detailedStatus.state === 'CONNECTED') {
+            console.log('✅ WhatsApp جاهز حسب الفحص المفصل');
+            // المتابعة مع الإرسال
+          } else {
+            throw new Error(`WhatsApp-Web.js غير جاهز. الحالة: ${JSON.stringify(detailedStatus)}`);
+          }
+        } catch (detailError) {
+          throw new Error('WhatsApp-Web.js Proxy غير متصل أو غير جاهز. تأكد من تشغيل start-whatsapp-web-js.bat على جهازك وأن QR Code تم مسحه.');
+        }
       }
 
       // الحصول على بيانات الحصة

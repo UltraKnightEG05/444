@@ -498,8 +498,9 @@ class WhatsAppService {
 
   getConnectionStatus() {
     return {
-     connected: this.isConnected && this.isReady,
+      connected: this.isConnected || this.isReady,
       ready: this.isReady,
+      state: this.isConnected && this.isReady ? 'CONNECTED' : 'DISCONNECTED',
       initializing: this.isInitializing,
       qrCode: this.qrCode,
       lastActivity: this.lastActivity,

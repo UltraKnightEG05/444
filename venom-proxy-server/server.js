@@ -154,11 +154,20 @@ app.post('/api/whatsapp/initialize', authenticateAPI, async (req, res) => {
 // فحص حالة الاتصال
 app.get('/api/whatsapp/status', (req, res) => {
   const status = whatsappService.getConnectionStatus();
+  
+  console.log('📊 فحص حالة WhatsApp من Frontend:', {
+    connected: status.connected,
+    ready: status.ready,
+    state: status.state,
+    service: status.service
+  });
+  
   res.json({
     success: true,
     data: {
       connected: status.connected,
       ready: status.ready,
+      state: status.state,
       qrCode: status.qrCode,
       lastActivity: status.lastActivity,
       retries: status.retries,
