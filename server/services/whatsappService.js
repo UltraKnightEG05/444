@@ -4,7 +4,7 @@ const WhatsAppProxyService = require('./whatsappProxyService');
 class WhatsAppService extends WhatsAppProxyService {
   constructor() {
     super();
-    this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'http://localhost:3002/api';
+    this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'https://api.go4host.net/api';
     console.log('🌐 Proxy URL:', this.proxyUrl);
   }
 

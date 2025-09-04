@@ -2,8 +2,8 @@ const axios = require('axios');
 
 class WhatsAppProxyService {
   constructor() {
-    this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'http://localhost:3002/api';
-    this.apiKey = process.env.WHATSAPP_PROXY_API_KEY || 'whatsapp-proxy-secret-2024';
+    this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'https://api.go4host.net/api';
+    this.apiKey = process.env.WHATSAPP_PROXY_API_KEY || 'venom-ultimate-fix-2024';
     this.isConnected = false;
     this.lastCheck = 0;
     this.checkInterval = 30000; // 30 ثانية
@@ -28,18 +28,21 @@ class WhatsAppProxyService {
         return this.isConnected;
       }
       
-      console.log('🔍 فحص اتصال WhatsApp-Web.js Proxy...');
+      console.log('🔍 فحص اتصال WhatsApp-Web.js Proxy على:', this.proxyUrl);
       const response = await axios.get(`${this.proxyUrl}/whatsapp/status`, {
         headers: this.getHeaders(),
-        timeout: 10000
+        timeout: 15000
       });
       
       console.log('📡 استجابة حالة WhatsApp من Proxy:', response.data);
       const statusData = response.data?.data || {};
-      // WhatsApp-Web.js جاهز إذا كان ready=true أو connected=true أو state=CONNECTED
+      
+      // فحص شامل للحالة
       this.isConnected = statusData.ready === true || 
                         statusData.connected === true || 
-                        statusData.state === 'CONNECTED';
+                        statusData.state === 'CONNECTED' ||
+                        statusData.state === 'READY';
+                        
       this.lastCheck = now;
       
       console.log('📊 حالة WhatsApp-Web.js:', this.isConnected ? 'جاهز للإرسال ✅' : 'غير جاهز ❌');
@@ -48,10 +51,15 @@ class WhatsAppProxyService {
       return this.isConnected;
     } catch (error) {
       console.error('❌ خطأ في فحص اتصال WhatsApp-Web.js Proxy:', error.message);
+      console.error('🔗 URL المستخدم:', this.proxyUrl);
+      console.error('🔑 API Key:', this.apiKey ? '[محدد]' : '[فارغ]');
       
       if (error.code === 'ECONNREFUSED') {
-        console.error('🔌 لا يمكن الاتصال بـ WhatsApp-Web.js Proxy على:', this.proxyUrl);
-        console.error('💡 تأكد من تشغيل start-whatsapp-web-js.bat');
+        console.error('🔌 لا يمكن الاتصال بـ WhatsApp-Web.js Proxy');
+        console.error('💡 تأكد من:');
+        console.error('   1. تشغيل start-whatsapp-web-js.bat على جهازك');
+        console.error('   2. Cloudflare Tunnel يعمل');
+        console.error('   3. الرابط صحيح:', this.proxyUrl);
       }
       
       this.isConnected = false;

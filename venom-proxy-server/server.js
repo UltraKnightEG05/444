@@ -31,7 +31,13 @@ app.use(helmet());
 // إعدادات CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3001', 'http://localhost:5173', 'https://hossam-students-backend.onrender.com', 'https://api.go4host.net'];
+  : [
+      'http://localhost:3001', 
+      'http://localhost:5173', 
+      'https://hossam-students-backend.onrender.com', 
+      'https://hossam-students-frontend.onrender.com',
+      'https://api.go4host.net'
+    ];
 
 app.use(cors({
   origin: allowedOrigins,
