@@ -5,10 +5,10 @@ const { execSync } = require('child_process');
 
 class TunnelManager {
   constructor() {
-    this.venomProcess = null;
+    this.whatsappProcess = null;
     this.tunnelProcess = null;
     this.isRunning = false;
-    this.tunnelId = '9752631e-8b0d-48a8-b9c1-20f376ce578f'; // استخدام الـ ID المحدد
+    this.tunnelId = '9752631e-8b0d-48a8-b9c1-20f376ce578f';
   }
 
   async checkCloudflared() {
@@ -51,7 +51,7 @@ class TunnelManager {
     }
   }
 
-  async startVenomProxy() {
+  async startWhatsAppProxy() {
     return new Promise((resolve, reject) => {
       console.log('🚀 بدء تشغيل WhatsApp-Web.js Proxy...');
       
@@ -67,7 +67,7 @@ class TunnelManager {
         TUNNEL_ID: this.tunnelId
       };
       
-      this.venomProcess = spawn('node', ['server.js'], {
+      this.whatsappProcess = spawn('node', ['server.js'], {
         env,
         stdio: 'pipe',
         cwd: path.join(__dirname, '..')
@@ -76,7 +76,7 @@ class TunnelManager {
       let serverReady = false;
       let qrCodeShown = false;
       
-      this.venomProcess.stdout.on('data', (data) => {
+      this.whatsappProcess.stdout.on('data', (data) => {
         const output = data.toString();
         
         // فلترة الرسائل المهمة فقط
@@ -85,9 +85,8 @@ class TunnelManager {
             output.includes('تم التحقق من الهوية') ||
             output.includes('جاهز بالكامل') ||
             output.includes('✅') ||
-            output.includes('❌') ||
             output.includes('🎉')) {
-          console.log(output);
+          console.log(output.trim());
         }
         
         // التحقق من جاهزية الخادم
@@ -109,7 +108,7 @@ class TunnelManager {
         }
       });
       
-      this.venomProcess.stderr.on('data', (data) => {
+      this.whatsappProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
         // عرض الأخطاء المهمة فقط
@@ -120,12 +119,12 @@ class TunnelManager {
         }
       });
       
-      this.venomProcess.on('error', (error) => {
-        console.error('❌ خطأ في تشغيل WhatsApp Proxy:', error);
+      this.whatsappProcess.on('error', (error) => {
+        console.error('❌ خطأ في تشغيل WhatsApp Proxy:', error.message);
         reject(error);
       });
       
-      this.venomProcess.on('exit', (code) => {
+      this.whatsappProcess.on('exit', (code) => {
         console.log(`🔴 WhatsApp Proxy توقف بكود: ${code}`);
         if (code !== 0 && !serverReady) {
           reject(new Error(`WhatsApp Proxy توقف بكود خطأ: ${code}`));
@@ -146,7 +145,6 @@ class TunnelManager {
     return new Promise((resolve, reject) => {
       console.log(`🌐 بدء تشغيل Cloudflare Tunnel بالـ ID المحدد: ${this.tunnelId}...`);
       
-      // استخدام الأمر المحدد مع Tunnel ID
       this.tunnelProcess = spawn('cloudflared', [
         'tunnel',
         'run',
@@ -161,31 +159,20 @@ class TunnelManager {
       this.tunnelProcess.stdout.on('data', (data) => {
         const output = data.toString();
         
-        // فلترة الرسائل المهمة فقط - تحسين للوضوح
         if (output.includes('Registered tunnel connection')) {
-          console.log('🌐 Tunnel: اتصال مسجل بنجاح');
-          
           if (!tunnelReady) {
             tunnelReady = true;
             console.log('✅ Cloudflare Tunnel متصل');
             console.log('🌍 الخادم متاح على: https://api.go4host.net');
             resolve();
           }
-        } else if (output.includes('Started tunnel')) {
-          console.log('🌐 Tunnel: تم بدء النفق');
-        } else if (output.includes('Connection registered')) {
-          console.log('🌐 Tunnel: تم تسجيل الاتصال');
         }
       });
       
       this.tunnelProcess.stderr.on('data', (data) => {
         const error = data.toString();
         
-        // فلترة الأخطاء - إظهار المهم فقط
-        if (error.includes('ERR') && (error.includes('failed') || error.includes('error'))) {
-          console.error('❌ Tunnel Error:', error.trim());
-        } else if (error.includes('INF') && error.includes('Registered tunnel connection')) {
-          console.log('✅ Tunnel: اتصال مسجل');
+        if (error.includes('INF') && error.includes('Registered tunnel connection')) {
           if (!tunnelReady) {
             tunnelReady = true;
             console.log('✅ Cloudflare Tunnel متصل');
@@ -196,7 +183,7 @@ class TunnelManager {
       });
       
       this.tunnelProcess.on('error', (error) => {
-        console.error('❌ خطأ في تشغيل Cloudflare Tunnel:', error);
+        console.error('❌ خطأ في تشغيل Cloudflare Tunnel:', error.message);
         reject(error);
       });
       
@@ -204,11 +191,10 @@ class TunnelManager {
         console.log(`🔴 Cloudflare Tunnel توقف بكود: ${code}`);
         if (code !== 0 && !tunnelReady) {
           console.log('⚠️ Tunnel فشل في البدء، سيتم المتابعة بدونه');
-          resolve(); // لا نفشل العملية بسبب Tunnel
+          resolve();
         }
       });
       
-      // timeout للتأكد من بدء النفق
       setTimeout(() => {
         if (!tunnelReady) {
           console.log('✅ Cloudflare Tunnel بدأ (timeout)');
@@ -220,28 +206,28 @@ class TunnelManager {
 
   async start() {
     try {
-      console.log('🚀 بدء تشغيل Venom Proxy v5.3.0 مع Cloudflare Tunnel...');
-      console.log('🔧 مع إصلاحات getMaybeMeUser المتقدمة لـ v5.3.0');
+      console.log('🚀 بدء تشغيل WhatsApp-Web.js مع Cloudflare Tunnel...');
+      console.log('📱 خدمة مستقرة وموثوقة');
       console.log(`🌐 Tunnel ID: ${this.tunnelId}`);
       
       // التحقق من cloudflared
       const hasCloudflared = await this.checkCloudflared();
       if (!hasCloudflared) {
-        console.log('⚠️ سيتم تشغيل Venom Proxy فقط بدون Tunnel');
-        await this.startVenomProxy();
+        console.log('⚠️ سيتم تشغيل WhatsApp Proxy فقط بدون Tunnel');
+        await this.startWhatsAppProxy();
         return;
       }
       
       // التحقق من وجود Tunnel
       const tunnelExists = await this.checkTunnelExists();
       if (!tunnelExists) {
-        console.log('⚠️ سيتم تشغيل Venom Proxy فقط بدون Tunnel');
-        await this.startVenomProxy();
+        console.log('⚠️ سيتم تشغيل WhatsApp Proxy فقط بدون Tunnel');
+        await this.startWhatsAppProxy();
         return;
       }
       
-      // بدء تشغيل Venom Proxy
-      await this.startVenomProxy();
+      // بدء تشغيل WhatsApp Proxy
+      await this.startWhatsAppProxy();
       
       // انتظار قليل لضمان بدء الخادم
       await new Promise(resolve => setTimeout(resolve, 10000));
@@ -255,30 +241,30 @@ class TunnelManager {
       console.log('📱 امسح QR Code الذي سيظهر لربط الواتساب');
       console.log('🌐 الخادم متاح محلياً على: http://localhost:3002');
       console.log('🌍 الخادم متاح عالمياً على: https://api.go4host.net');
-      console.log('🔧 تم تطبيق إصلاحات getMaybeMeUser المتقدمة لـ v5.3.0');
+      console.log('📱 خدمة: WhatsApp-Web.js v1.23.0');
       
       // مراقبة العمليات
       this.monitorProcesses();
       
     } catch (error) {
-      console.error('❌ خطأ في بدء النظام:', error);
+      console.error('❌ خطأ في بدء النظام:', error.message);
       await this.stop();
       process.exit(1);
     }
   }
 
   monitorProcesses() {
-    // مراقبة Venom Proxy
-    if (this.venomProcess) {
-      this.venomProcess.on('exit', (code) => {
-        console.log(`🔴 Venom Proxy توقف بكود: ${code}`);
+    // مراقبة WhatsApp Proxy
+    if (this.whatsappProcess) {
+      this.whatsappProcess.on('exit', (code) => {
+        console.log(`🔴 WhatsApp Proxy توقف بكود: ${code}`);
         if (code !== 0 && this.isRunning) {
-          console.log('🔄 إعادة تشغيل Venom Proxy خلال 15 ثانية...');
+          console.log('🔄 إعادة تشغيل WhatsApp Proxy خلال 15 ثانية...');
           setTimeout(async () => {
             try {
-              await this.startVenomProxy();
+              await this.startWhatsAppProxy();
             } catch (error) {
-              console.error('❌ فشل في إعادة تشغيل Venom Proxy:', error);
+              console.error('❌ فشل في إعادة تشغيل WhatsApp Proxy:', error.message);
             }
           }, 15000);
         }
@@ -295,7 +281,7 @@ class TunnelManager {
             try {
               await this.startCloudflaredTunnel();
             } catch (error) {
-              console.error('❌ فشل في إعادة تشغيل Cloudflare Tunnel:', error);
+              console.error('❌ فشل في إعادة تشغيل Cloudflare Tunnel:', error.message);
             }
           }, 10000);
         }
@@ -308,9 +294,9 @@ class TunnelManager {
     
     this.isRunning = false;
     
-    if (this.venomProcess) {
-      this.venomProcess.kill('SIGTERM');
-      console.log('🔴 تم إيقاف Venom Proxy');
+    if (this.whatsappProcess) {
+      this.whatsappProcess.kill('SIGTERM');
+      console.log('🔴 تم إيقاف WhatsApp Proxy');
     }
     
     if (this.tunnelProcess) {
@@ -318,9 +304,7 @@ class TunnelManager {
       console.log('🔴 تم إيقاف Cloudflare Tunnel');
     }
     
-    // انتظار قليل للتأكد من الإغلاق
     await new Promise(resolve => setTimeout(resolve, 5000));
-    
     console.log('✅ تم إيقاف جميع العمليات');
   }
 }

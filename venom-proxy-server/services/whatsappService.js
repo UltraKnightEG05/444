@@ -12,8 +12,9 @@ class WhatsAppService {
     this.qrCode = null;
     this.lastActivity = null;
     this.retries = 0;
-    this.maxRetries = 5;
+    this.maxRetries = 3;
     this.sessionName = process.env.WHATSAPP_SESSION_NAME || 'attendance-system';
+    this.initializationTimeout = null;
     
     console.log('🚀 تهيئة WhatsApp-Web.js Service...');
     console.log('📱 اسم الجلسة:', this.sessionName);
@@ -31,14 +32,15 @@ class WhatsAppService {
     }
 
     this.isInitializing = true;
-    this.retries = 0;
+    this.retries++;
 
     try {
-      console.log('🚀 بدء تهيئة WhatsApp-Web.js...');
+      console.log(`🚀 بدء تهيئة WhatsApp-Web.js (محاولة ${this.retries}/${this.maxRetries})...`);
       
       await this.ensureDirectories();
+      await this.cleanup();
       
-      // إنشاء client جديد مع LocalAuth
+      // إنشاء client جديد مع إعدادات محسنة
       this.client = new Client({
         authStrategy: new LocalAuth({
           clientId: this.sessionName,
@@ -53,42 +55,128 @@ class WhatsAppService {
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process',
             '--disable-gpu',
             '--disable-web-security',
             '--disable-features=VizDisplayCompositor',
             '--disable-background-timer-throttling',
             '--disable-backgrounding-occluded-windows',
             '--disable-renderer-backgrounding',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-default-apps',
+            '--disable-sync',
+            '--disable-translate',
+            '--disable-background-networking',
+            '--disable-client-side-phishing-detection',
+            '--disable-hang-monitor',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--metrics-recording-only',
+            '--no-default-browser-check',
+            '--safebrowsing-disable-auto-update',
+            '--enable-automation',
+            '--password-store=basic',
+            '--use-mock-keychain',
+            '--disable-blink-features=AutomationControlled',
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           ],
-          executablePath: process.env.CHROME_PATH
+          executablePath: process.env.CHROME_PATH,
+          timeout: 60000,
+          protocolTimeout: 60000
+        },
+        webVersionCache: {
+          type: 'remote',
+          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
         }
       });
 
       // إعداد event handlers
       this.setupEventHandlers();
       
+      // إعداد timeout للتهيئة
+      this.initializationTimeout = setTimeout(() => {
+        if (this.isInitializing) {
+          console.log('⏰ انتهت مهلة التهيئة - إعادة المحاولة...');
+          this.handleInitializationTimeout();
+        }
+      }, 120000); // دقيقتان
+      
       // بدء التهيئة
       console.log('🔄 بدء تهيئة WhatsApp Client...');
       await this.client.initialize();
       
-      this.isInitializing = false;
       return { 
         success: true, 
-        message: 'تم تهيئة WhatsApp بنجاح',
+        message: 'تم بدء تهيئة WhatsApp بنجاح',
         alreadyConnected: false 
       };
 
     } catch (error) {
-      console.error('❌ خطأ في تهيئة WhatsApp:', error);
+      console.error('❌ خطأ في تهيئة WhatsApp:', error.message);
       this.isInitializing = false;
+      
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout);
+      }
+      
       await this.handleError(error);
+      
+      // إعادة المحاولة إذا لم نصل للحد الأقصى
+      if (this.retries < this.maxRetries) {
+        console.log(`🔄 إعادة المحاولة خلال 10 ثواني... (${this.retries}/${this.maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        return this.initialize();
+      }
       
       return { 
         success: false, 
-        message: `فشل في تهيئة WhatsApp: ${error.message}` 
+        message: `فشل في تهيئة WhatsApp بعد ${this.maxRetries} محاولات: ${error.message}` 
       };
+    }
+  }
+
+  async cleanup() {
+    try {
+      // إغلاق العميل السابق إذا كان موجوداً
+      if (this.client) {
+        try {
+          await this.client.destroy();
+        } catch (error) {
+          console.log('⚠️ خطأ في إغلاق العميل السابق:', error.message);
+        }
+        this.client = null;
+      }
+      
+      this.isConnected = false;
+      this.isReady = false;
+      this.qrCode = null;
+      
+      console.log('🧹 تم تنظيف الجلسة السابقة');
+    } catch (error) {
+      console.error('❌ خطأ في التنظيف:', error.message);
+    }
+  }
+
+  async handleInitializationTimeout() {
+    console.log('⏰ انتهت مهلة التهيئة - إعادة تعيين...');
+    
+    this.isInitializing = false;
+    
+    if (this.client) {
+      try {
+        await this.client.destroy();
+      } catch (error) {
+        console.log('⚠️ خطأ في إغلاق العميل:', error.message);
+      }
+      this.client = null;
+    }
+    
+    // إعادة المحاولة
+    if (this.retries < this.maxRetries) {
+      console.log('🔄 إعادة المحاولة بعد timeout...');
+      setTimeout(() => {
+        this.initialize();
+      }, 5000);
     }
   }
 
@@ -127,25 +215,33 @@ class WhatsAppService {
       console.error('❌ فشل في المصادقة:', msg);
       this.isConnected = false;
       this.isReady = false;
+      this.isInitializing = false;
     });
 
     // عند الجاهزية
-    this.client.on('ready', () => {
+    this.client.on('ready', async () => {
       console.log('🎉 WhatsApp Web جاهز بالكامل للإرسال!');
       this.isConnected = true;
       this.isReady = true;
+      this.isInitializing = false;
       this.lastActivity = new Date().toISOString();
       
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout);
+      }
+      
       // الحصول على معلومات الحساب
-      this.client.info.then(info => {
+      try {
+        const info = await this.client.info;
         console.log('👤 معلومات الحساب:');
         console.log(`   📱 الرقم: ${info.wid.user}`);
         console.log(`   👤 الاسم: ${info.pushname}`);
         console.log(`   🔋 البطارية: ${info.battery}%`);
         console.log(`   📶 متصل: ${info.connected ? 'نعم' : 'لا'}`);
-      }).catch(err => {
+        console.log(`   📱 المنصة: ${info.platform}`);
+      } catch (err) {
         console.log('⚠️ لم يتم الحصول على معلومات الحساب:', err.message);
-      });
+      }
     });
 
     // عند قطع الاتصال
@@ -153,9 +249,16 @@ class WhatsAppService {
       console.log('🔌 تم قطع الاتصال:', reason);
       this.isConnected = false;
       this.isReady = false;
+      this.isInitializing = false;
+      
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout);
+      }
       
       if (reason === 'LOGOUT') {
         console.log('🔒 تم تسجيل الخروج من الجهاز');
+      } else if (reason === 'NAVIGATION') {
+        console.log('🔄 انقطاع مؤقت - سيتم إعادة الاتصال تلقائياً');
       }
     });
 
@@ -163,15 +266,15 @@ class WhatsAppService {
     this.client.on('message', (message) => {
       this.lastActivity = new Date().toISOString();
       
-      // يمكن إضافة معالجة للرسائل الواردة هنا
+      // رد تلقائي على رسائل الاختبار
       if (message.body === '!ping') {
-        message.reply('pong');
+        message.reply('pong - نظام الحضور يعمل بشكل صحيح ✅');
       }
     });
 
     // معالجة الأخطاء
     this.client.on('error', (error) => {
-      console.error('❌ خطأ في WhatsApp Client:', error);
+      console.error('❌ خطأ في WhatsApp Client:', error.message);
       this.handleError(error);
     });
   }
@@ -179,7 +282,7 @@ class WhatsAppService {
   async sendMessage(phoneNumber, message, messageType = 'custom') {
     try {
       if (!this.isConnected || !this.isReady) {
-        throw new Error('WhatsApp غير متصل أو غير جاهز');
+        throw new Error('WhatsApp غير متصل أو غير جاهز. يرجى التأكد من مسح QR Code أولاً.');
       }
 
       console.log(`📤 إرسال رسالة إلى: ${phoneNumber}`);
@@ -207,7 +310,7 @@ class WhatsAppService {
       };
       
     } catch (error) {
-      console.error('❌ خطأ في إرسال الرسالة:', error);
+      console.error('❌ خطأ في إرسال الرسالة:', error.message);
       throw new Error(`فشل في إرسال الرسالة: ${error.message}`);
     }
   }
@@ -293,7 +396,7 @@ class WhatsAppService {
       };
       
     } catch (error) {
-      console.error('❌ فشل اختبار الرسالة:', error);
+      console.error('❌ فشل اختبار الرسالة:', error.message);
       return {
         success: false,
         error: error.message
@@ -329,17 +432,17 @@ class WhatsAppService {
     const dirs = ['./sessions', './logs', './backups'];
     for (const dir of dirs) {
       await fs.ensureDir(dir);
-      console.log(`📁 تم التأكد من وجود المجلد: ${dir}`);
     }
   }
 
   async saveQRCode(qr) {
     try {
       const qrPath = path.join('./logs', `qr-code-${Date.now()}.png`);
-      await fs.writeFile(qrPath, qr);
+      const QRCode = require('qrcode');
+      await QRCode.toFile(qrPath, qr);
       console.log(`💾 تم حفظ QR Code في: ${qrPath}`);
     } catch (error) {
-      console.error('❌ خطأ في حفظ QR Code:', error);
+      console.error('❌ خطأ في حفظ QR Code:', error.message);
     }
   }
 
@@ -347,9 +450,11 @@ class WhatsAppService {
     return {
       connected: this.isConnected,
       ready: this.isReady,
+      initializing: this.isInitializing,
       qrCode: this.qrCode,
       lastActivity: this.lastActivity,
       retries: this.retries,
+      maxRetries: this.maxRetries,
       service: 'whatsapp-web.js',
       version: '1.23.0'
     };
@@ -359,6 +464,10 @@ class WhatsAppService {
     try {
       console.log('🔌 قطع اتصال WhatsApp...');
       
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout);
+      }
+      
       if (this.client) {
         await this.client.destroy();
         this.client = null;
@@ -366,12 +475,13 @@ class WhatsAppService {
       
       this.isConnected = false;
       this.isReady = false;
+      this.isInitializing = false;
       this.qrCode = null;
       
       console.log('✅ تم قطع الاتصال بنجاح');
       
     } catch (error) {
-      console.error('❌ خطأ في قطع الاتصال:', error);
+      console.error('❌ خطأ في قطع الاتصال:', error.message);
     }
   }
 
@@ -392,20 +502,20 @@ class WhatsAppService {
         errors = await fs.readJson(logPath);
       }
     } catch (e) {
-      console.error('خطأ في قراءة ملف الأخطاء:', e);
+      console.error('خطأ في قراءة ملف الأخطاء:', e.message);
     }
     
     errors.push(errorLog);
     
-    // الاحتفاظ بآخر 100 خطأ فقط
-    if (errors.length > 100) {
-      errors = errors.slice(-100);
+    // الاحتفاظ بآخر 50 خطأ فقط
+    if (errors.length > 50) {
+      errors = errors.slice(-50);
     }
     
     try {
       await fs.writeJson(logPath, errors, { spaces: 2 });
     } catch (e) {
-      console.error('خطأ في كتابة ملف الأخطاء:', e);
+      console.error('خطأ في كتابة ملف الأخطاء:', e.message);
     }
   }
 
@@ -419,7 +529,7 @@ class WhatsAppService {
       const chats = await this.client.getChats();
       return chats;
     } catch (error) {
-      console.error('❌ خطأ في جلب المحادثات:', error);
+      console.error('❌ خطأ في جلب المحادثات:', error.message);
       return [];
     }
   }
@@ -433,7 +543,7 @@ class WhatsAppService {
       const contacts = await this.client.getContacts();
       return contacts;
     } catch (error) {
-      console.error('❌ خطأ في جلب جهات الاتصال:', error);
+      console.error('❌ خطأ في جلب جهات الاتصال:', error.message);
       return [];
     }
   }
@@ -456,7 +566,7 @@ class WhatsAppService {
       };
       
     } catch (error) {
-      console.error('❌ خطأ في إرسال الوسائط:', error);
+      console.error('❌ خطأ في إرسال الوسائط:', error.message);
       throw error;
     }
   }
@@ -476,7 +586,7 @@ class WhatsAppService {
         platform: info.platform
       };
     } catch (error) {
-      console.error('❌ خطأ في جلب معلومات الحساب:', error);
+      console.error('❌ خطأ في جلب معلومات الحساب:', error.message);
       return null;
     }
   }

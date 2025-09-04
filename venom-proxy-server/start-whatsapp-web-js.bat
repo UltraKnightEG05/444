@@ -4,7 +4,7 @@ color 0A
 
 echo.
 echo ================================================
-echo    WhatsApp-Web.js Proxy Server
+echo    WhatsApp-Web.js Proxy Server v2.0
 echo    مع Cloudflare Tunnel التلقائي
 echo    بديل مستقر لـ Venom-Bot
 echo ================================================
@@ -25,8 +25,10 @@ node --version
 REM التحقق من Chrome
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
     echo ✅ Chrome متوفر
+    set CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
 ) else if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" (
     echo ✅ Chrome متوفر
+    set CHROME_PATH=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe
 ) else (
     echo ❌ Chrome غير مثبت
     echo 💡 حمل Chrome من: https://www.google.com/chrome/
@@ -105,7 +107,7 @@ echo 🏠 والمحلي على: http://localhost:3002
 echo.
 
 REM تشغيل النظام مع Tunnel
-npm run start:tunnel:ultimate
+npm run start:tunnel
 
 echo.
 echo 🛑 تم إيقاف النظام
