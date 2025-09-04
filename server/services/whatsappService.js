@@ -4,7 +4,7 @@ const WhatsAppProxyService = require('./whatsappProxyService');
 class WhatsAppService extends WhatsAppProxyService {
   constructor() {
     super();
-    this.proxyUrl = process.env.VENOM_PROXY_URL || 'https://api.go4host.net/api';
+    this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'http://localhost:3002/api';
     console.log('🌐 Proxy URL:', this.proxyUrl);
   }
 
@@ -16,7 +16,11 @@ class WhatsAppService extends WhatsAppProxyService {
 
     if (this.isConnected && this.client) {
       console.log('✅ الواتساب متصل بالفعل');
+      return { success: true, message: 'WhatsApp-Web.js متصل بالفعل', alreadyConnected: true };
     }
+    
+    // استدعاء تهيئة WhatsApp-Web.js Proxy
+    return await super.initialize();
   }
 
   async sendSessionReport(sessionId) {
@@ -26,7 +30,7 @@ class WhatsAppService extends WhatsAppProxyService {
       // التحقق من حالة الاتصال
       const isConnected = await this.checkConnection();
       if (!isConnected) {
-        throw new Error('Venom Proxy غير متصل. تأكد من تشغيل الخادم الوسيط على جهازك.');
+        throw new Error('WhatsApp-Web.js Proxy غير متصل أو غير جاهز. تأكد من تشغيل start-whatsapp-web-js.bat على جهازك وأن QR Code تم مسحه.');
       }
 
       // الحصول على بيانات الحصة
@@ -128,7 +132,7 @@ class WhatsAppService extends WhatsAppProxyService {
       
       // إرسال الرسائل بشكل مجمع
       if (messagesToSend.length > 0) {
-        console.log(`📤 إرسال ${messagesToSend.length} رسالة عبر Venom Proxy...`);
+        console.log(`📤 إرسال ${messagesToSend.length} رسالة عبر WhatsApp-Web.js Proxy...`);
         
         const bulkResult = await this.sendBulkMessages(messagesToSend);
         
@@ -151,7 +155,7 @@ class WhatsAppService extends WhatsAppProxyService {
             }
           }
         } else {
-          throw new Error('فشل في إرسال الرسائل عبر Venom Proxy');
+          throw new Error('فشل في إرسال الرسائل عبر WhatsApp-Web.js Proxy');
         }
       }
       
@@ -178,7 +182,7 @@ class WhatsAppService extends WhatsAppProxyService {
   // إرسال رسالة واحدة (للتوافق مع الكود الحالي)
   async sendMessage(phoneNumber, message, messageType = 'custom') {
     try {
-      console.log(`📤 إرسال رسالة واحدة عبر Venom Proxy إلى: ${phoneNumber}`);
+      console.log(`📤 إرسال رسالة واحدة عبر WhatsApp-Web.js Proxy إلى: ${phoneNumber}`);
       const result = await super.sendMessage(phoneNumber, message, messageType);
       return result;
     } catch (error) {
@@ -190,7 +194,7 @@ class WhatsAppService extends WhatsAppProxyService {
   // دالة اختبار إرسال رسالة واحدة
   async testMessage(phoneNumber, message = null) {
     try {
-      console.log(`🧪 اختبار إرسال رسالة عبر Venom Proxy إلى: ${phoneNumber}`);
+      console.log(`🧪 اختبار إرسال رسالة عبر WhatsApp-Web.js Proxy إلى: ${phoneNumber}`);
       const result = await super.testMessage(phoneNumber, message);
       return result;
     } catch (error) {
@@ -205,7 +209,7 @@ class WhatsAppService extends WhatsAppProxyService {
   // إرسال رسائل متعددة (محسنة)
   async sendBulkMessages(messages) {
     try {
-      console.log(`📤 إرسال ${messages.length} رسالة عبر Venom Proxy...`);
+      console.log(`📤 إرسال ${messages.length} رسالة عبر WhatsApp-Web.js Proxy...`);
       const result = await super.sendBulkMessages(messages);
       return result;
     } catch (error) {
@@ -249,6 +253,25 @@ class WhatsAppService extends WhatsAppProxyService {
     }
   }
 
+  // دالة للحصول على معلومات الحساب
+  async getAccountInfo() {
+    return await super.getAccountInfo();
+  }
+
+  // دالة للحصول على حالة الاتصال مع تفاصيل
+  async getDetailedStatus() {
+    try {
+      const response = await axios.get(`${this.proxyUrl}/whatsapp/status`, {
+        headers: this.getHeaders(),
+        timeout: 10000
+      });
+      
+      return response.data?.data || { connected: false, ready: false };
+    } catch (error) {
+      console.error('❌ خطأ في جلب حالة WhatsApp-Web.js:', error.message);
+      return { connected: false, ready: false, error: error.message };
+    }
+  }
 }
 
 // إنشاء instance واحد

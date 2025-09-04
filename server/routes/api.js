@@ -1471,17 +1471,22 @@ router.get('/dashboard/stats', async (req, res) => {
       GROUP BY c.id, c.name
       HAVING (SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) / COUNT(*)) * 100 < 70
     `);
+    console.log('📊 طلب حالة WhatsApp-Web.js...');
+    const detailedStatus = await whatsappService.getDetailedStatus();
+    const isConnected = whatsappService.getConnectionStatus();
     
     res.json({
       success: true,
       data: {
-        totalStudents: totalStudents[0].count,
-        totalSessions: totalSessions[0].count,
+        connected: detailedStatus.connected || isConnected,
+        ready: detailedStatus.ready || isConnected,
+        service: 'whatsapp-web.js',
+        version: '1.23.0',
         totalClasses: totalClasses[0].count,
         attendanceRate: Math.round(attendanceRate * 10) / 10,
         todayPresent: todayAttendance[0].present || 0,
         todayAbsent: todayAttendance[0].absent || 0,
-        lowAttendanceClasses: lowAttendanceClasses.map(c => c.name)
+        error: detailedStatus.error || null
       }
     });
   } catch (error) {
@@ -1490,4 +1495,65 @@ router.get('/dashboard/stats', async (req, res) => {
   }
 });
 
+// إضافة endpoint لجلب معلومات الحساب
+router.get('/whatsapp/info', async (req, res) => {
+  try {
+    console.log('👤 طلب معلومات حساب WhatsApp-Web.js...');
+    const accountInfo = await whatsappService.getAccountInfo();
+    
+    if (accountInfo) {
+      res.json({
+        success: true,
+        data: accountInfo
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'لا يمكن جلب معلومات الحساب. تأكد من الاتصال.'
+      });
+    }
+  } catch (error) {
+    console.error('❌ خطأ في جلب معلومات الحساب:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في جلب معلومات الحساب: ' + error.message
+    });
+  }
+});
 module.exports = router;
+
+// إضافة endpoint لاختبار الرسائل
+router.post('/whatsapp/test-message', async (req, res) => {
+  try {
+    const { phoneNumber, message } = req.body;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'رقم الهاتف مطلوب'
+      });
+    }
+    
+    console.log('🧪 طلب اختبار رسالة WhatsApp-Web.js...');
+    const result = await whatsappService.testMessage(phoneNumber, message);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        messageId: result.messageId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('❌ خطأ في اختبار الرسالة:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في اختبار الرسالة: ' + error.message
+    });
+  }
+});
