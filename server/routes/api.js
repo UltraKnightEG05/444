@@ -854,6 +854,19 @@ router.put('/sessions/:id/toggle-status', async (req, res) => {
       newStatus = 'active';
     }
 
+   console.log('📤 طلب إرسال تقرير الحصة:', sessionId);
+   
+   // فحص حالة WhatsApp أولاً
+   const isConnected = await whatsappService.checkConnection();
+   console.log('📊 حالة WhatsApp قبل الإرسال:', isConnected);
+   
+   if (!isConnected) {
+     return res.status(400).json({
+       success: false,
+       message: 'WhatsApp-Web.js غير جاهز. تأكد من تشغيل start-whatsapp-web-js.bat وأن QR Code تم مسحه.'
+     });
+   }
+
     console.log('🔄 الحالة الجديدة:', newStatus);
     
     // تحديث حالة الحصة
@@ -1399,7 +1412,7 @@ router.post('/whatsapp/send-session-report', async (req, res) => {
   } catch (error) {
     console.error('خطأ في إرسال تقرير الحصة:', error);
     
-    res.status(500).json({ 
+     message: error.message || 'فشل في إرسال التقرير'
       success: false, 
       message: 'خطأ في إرسال تقرير الحصة: ' + error.message 
     });

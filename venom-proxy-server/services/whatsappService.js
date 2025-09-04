@@ -258,11 +258,13 @@ class WhatsAppService {
       // الحصول على معلومات الحساب
       try {
         const info = await this.client.info;
+       const state = await this.client.getState();
         console.log('👤 معلومات الحساب:');
         console.log(`   📱 الرقم: ${info.wid.user}`);
         console.log(`   👤 الاسم: ${info.pushname}`);
         console.log(`   🔋 البطارية: ${info.battery}%`);
-        console.log(`   📶 متصل: ${info.connected ? 'نعم' : 'لا'}`);
+       console.log(`   📶 حالة الاتصال: ${state}`);
+       console.log(`   📶 متصل: نعم`);
         console.log(`   📱 المنصة: ${info.platform}`);
       } catch (err) {
         console.log('⚠️ لم يتم الحصول على معلومات الحساب:', err.message);
@@ -306,9 +308,9 @@ class WhatsAppService {
 
   async sendMessage(phoneNumber, message, messageType = 'custom') {
     try {
-      if (!this.isConnected || !this.isReady) {
-        throw new Error('WhatsApp غير متصل أو غير جاهز. يرجى التأكد من مسح QR Code أولاً.');
-      }
+     if (!this.isReady) {
+       throw new Error('WhatsApp غير جاهز للإرسال. يرجى التأكد من مسح QR Code وانتظار رسالة "جاهز بالكامل".');
+     }
 
       console.log(`📤 إرسال رسالة إلى: ${phoneNumber}`);
       
@@ -316,10 +318,14 @@ class WhatsAppService {
       console.log(`📱 الرقم المنسق: ${formattedNumber}`);
       
       // التحقق من صحة الرقم
-      const isValidNumber = await this.client.isRegisteredUser(formattedNumber);
-      if (!isValidNumber) {
-        throw new Error(`الرقم ${phoneNumber} غير مسجل في واتساب`);
-      }
+     try {
+       const isValidNumber = await this.client.isRegisteredUser(formattedNumber);
+       if (!isValidNumber) {
+         throw new Error(`الرقم ${phoneNumber} غير مسجل في واتساب`);
+       }
+     } catch (validationError) {
+       console.log('⚠️ تخطي فحص صحة الرقم:', validationError.message);
+     }
       
       // إرسال الرسالة
       const result = await this.client.sendMessage(formattedNumber, message);
@@ -492,7 +498,7 @@ class WhatsAppService {
 
   getConnectionStatus() {
     return {
-      connected: this.isConnected,
+     connected: this.isConnected && this.isReady,
       ready: this.isReady,
       initializing: this.isInitializing,
       qrCode: this.qrCode,

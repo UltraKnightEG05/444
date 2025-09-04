@@ -34,10 +34,11 @@ class WhatsAppProxyService {
         timeout: 10000
       });
       
-      this.isConnected = response.data?.data?.connected && response.data?.data?.ready || false;
+     const statusData = response.data?.data || {};
+     this.isConnected = statusData.ready === true;
       this.lastCheck = now;
       
-      console.log('📊 حالة WhatsApp-Web.js:', this.isConnected ? 'متصل وجاهز' : 'غير متصل أو غير جاهز');
+     console.log('📊 حالة WhatsApp-Web.js:', this.isConnected ? 'جاهز للإرسال' : 'غير جاهز');
       console.log('📋 تفاصيل الحالة:', response.data?.data);
       
       return this.isConnected;
