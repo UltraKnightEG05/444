@@ -830,57 +830,101 @@ router.delete('/sessions/:id', async (req, res) => {
   }
 });
 
+
+
+// ==================== تغيير حالة الحصة (مع واتساب بعد التغيير) ====================
 router.put('/sessions/:id/toggle-status', async (req, res) => {
   try {
-    console.log('🔄 تغيير حالة الحصة:', req.params.id);
+    console.log('🔄 طلب تغيير حالة الحصة:', req.params.id);
     
-    // جلب الحصة من قاعدة البيانات
-    const sessionQuery = 'SELECT * FROM sessions WHERE id = ?';
-    const sessionResult = await executeQuery(sessionQuery, [req.params.id]);
-    
-    if (sessionResult.length === 0) {
-      return res.status(404).json({ success: false, message: 'الحصة غير موجودة' });
+    // جلب الحصة الحالية
+    const session = await Session.findById(req.params.id);
+    if (!session) {
+      console.log('❌ الحصة غير موجودة:', req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'الحصة غير موجودة' 
+      });
     }
     
-    const session = sessionResult[0];
-
-    console.log('📊 الحالة الحالية:', session.status);
+    console.log('📊 الحصة الحالية:', {
+      id: session.id,
+      status: session.status,
+      className: session.class_name
+    });
+    
+    // تحديد الحالة الجديدة
     let newStatus;
-    if (session.status === 'active') {
-      newStatus = 'completed';
-    } else if (session.status === 'completed') {
-      newStatus = 'active';
-    } else {
-      newStatus = 'active';
+    switch (session.status) {
+      case 'scheduled':
+        newStatus = 'active';
+        break;
+      case 'active':
+        newStatus = 'completed';
+        break;
+      case 'completed':
+        newStatus = 'scheduled';
+        break;
+      default:
+        newStatus = 'active';
     }
-
-   console.log('📤 طلب إرسال تقرير الحصة:', sessionId);
-   
-   // فحص حالة WhatsApp أولاً
-   const isConnected = await whatsappService.checkConnection();
-   console.log('📊 حالة WhatsApp قبل الإرسال:', isConnected);
-   
-   if (!isConnected) {
-     return res.status(400).json({
-       success: false,
-       message: 'WhatsApp-Web.js غير جاهز. تأكد من تشغيل start-whatsapp-web-js.bat وأن QR Code تم مسحه.'
-     });
-   }
-
-    console.log('🔄 الحالة الجديدة:', newStatus);
     
-    // تحديث حالة الحصة
-    const updateQuery = 'UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-    const updateResult = await executeQuery(updateQuery, [newStatus, req.params.id]);
-    const success = updateResult.affectedRows > 0;
+    console.log('🔄 تغيير الحالة من', session.status, 'إلى', newStatus);
     
-    console.log('✅ نتيجة تحديث الحالة:', success);
-    res.json({ success, data: { newStatus } });
+    // تحديث الحالة في قاعدة البيانات
+    const query = `
+      UPDATE sessions 
+      SET status = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `;
+    
+    const result = await executeQuery(query, [newStatus, req.params.id]);
+    
+    if (result.affectedRows > 0) {
+      console.log('✅ تم تغيير حالة الحصة بنجاح');
+      
+      // ==================== جزء الواتساب بعد التحديث ====================
+      try {
+        const isConnected = await whatsappService.checkConnection();
+        if (isConnected) {
+          console.log('📤 إرسال تقرير الحصة عبر واتساب:', req.params.id);
+          await whatsappService.sendSessionReport(req.params.id);
+        } else {
+          console.log('⚠️ واتساب غير متصل – تم تخطي إرسال التقرير');
+        }
+      } catch (whatsError) {
+        console.error('❌ خطأ أثناء إرسال تقرير واتساب:', whatsError);
+      }
+      // ===============================================================
+      
+      res.json({ 
+        success: true, 
+        message: `تم تغيير حالة الحصة إلى ${newStatus}`,
+        data: { 
+          id: req.params.id,
+          oldStatus: session.status,
+          newStatus: newStatus
+        }
+      });
+    } else {
+      console.log('❌ فشل في تحديث الحصة');
+      res.status(500).json({ 
+        success: false, 
+        message: 'فشل في تحديث حالة الحصة' 
+      });
+    }
+    
   } catch (error) {
-    console.error('خطأ في تغيير حالة الحصة:', error);
-    res.status(500).json({ success: false, message: 'خطأ في تغيير حالة الحصة' });
+    console.error('❌ خطأ في تغيير حالة الحصة:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'خطأ في تغيير حالة الحصة: ' + error.message 
+    });
   }
 });
+
+
+
 
 // إضافة route جديد لجلب طلاب المجموعة للجلسة
 router.get('/sessions/:id/students', async (req, res) => {
@@ -1569,5 +1613,7 @@ router.post('/whatsapp/test-message', async (req, res) => {
     });
   }
 });
+
+
 
 module.exports = router;

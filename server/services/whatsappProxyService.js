@@ -3,7 +3,7 @@ const axios = require('axios');
 class WhatsAppProxyService {
   constructor() {
     this.proxyUrl = process.env.WHATSAPP_PROXY_URL || 'https://api.go4host.net/api';
-    this.apiKey = process.env.WHATSAPP_PROXY_API_KEY || 'venom-ultimate-fix-2024';
+    this.apiKey = process.env.WHATSAPP_PROXY_API_KEY || 'R8vFj92rNc7eQmZKx5U2hYT4bB9gLz3eTqXpD6wMv1Jc0hL7nAqEyWGsPd0VxQYd';
     this.isConnected = false;
     this.lastCheck = 0;
     this.checkInterval = 30000; // 30 ثانية

@@ -1,8 +1,8 @@
-# WhatsApp-Web.js Proxy Server - خادم الواتساب المحسن
+# Venom Proxy Server - خادم الواتساب الوسيط
 
 ## نظرة عامة
 
-هذا الخادم يعمل كوسيط بين تطبيق إدارة الحضور المنشور على Render وخدمة الواتساب باستخدام WhatsApp-Web.js - بديل مستقر وموثوق لـ Venom-Bot.
+هذا الخادم يعمل كوسيط بين تطبيق إدارة الحضور المنشور على Render وخدمة الواتساب باستخدام venom-bot على جهازك الشخصي.
 
 ## الهيكل المعماري
 
@@ -11,31 +11,15 @@
     ↓
 [Backend - Render] 
     ↓ HTTP API
-[WhatsApp-Web.js Proxy + Cloudflare Tunnel - جهازك الشخصي] 
-    ↓ WhatsApp-Web.js
+[Venom Proxy - جهازك الشخصي] 
+    ↓ venom-bot
 [WhatsApp Web]
 ```
-
-## مميزات WhatsApp-Web.js
-
-### ✅ مزايا على Venom-Bot
-- **استقرار عالي**: بدون مشاكل getMaybeMeUser أو WebSocket
-- **تحديثات منتظمة**: مطور نشط ومجتمع كبير
-- **أداء أفضل**: استهلاك ذاكرة أقل
-- **توثيق ممتاز**: API واضح ومفهوم
-- **دعم كامل**: لجميع ميزات واتساب
-
-### 🌍 دعم Cloudflare Tunnel التلقائي
-- تشغيل تلقائي لـ Cloudflare Tunnel
-- مراقبة ومعالجة انقطاع النفق
-- إعادة تشغيل تلقائي عند الفشل
-- دعم كامل للوصول العالمي
 
 ## المتطلبات
 
 - Node.js 16+ مثبت على جهازك
 - Google Chrome مثبت
-- Cloudflare Tunnel مثبت ومُعد
 - اتصال إنترنت مستقر
 - هاتف ذكي مع واتساب
 
@@ -55,79 +39,116 @@ cp .env.example .env
 عدّل ملف `.env`:
 ```env
 PORT=3002
-API_SECRET_KEY=venom-ultimate-fix-2024
+API_SECRET_KEY=your-super-secret-api-key-here
 ALLOWED_ORIGINS=https://hossam-students-backend.onrender.com,https://api.go4host.net,http://localhost:3001
-WHATSAPP_SESSION_NAME=attendance-system-whatsapp-web-js
+WHATSAPP_SESSION_NAME=attendance-system-proxy
+WHATSAPP_HEADLESS=true
 CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
 TUNNEL_URL=https://api.go4host.net
-TUNNEL_ID=9752631e-8b0d-48a8-b9c1-20f376ce578f
 ```
 
-### 3. إعداد Cloudflare Tunnel
+### 3. تشغيل الخادم
 ```bash
-# تسجيل الدخول
+# للتطوير
+npm run dev
+
+# للإنتاج
+npm start
+
+# تنظيف الجلسة وبدء جديد
+npm run start:clean
+```
+
+## إعداد Cloudflare Tunnel
+
+### 1. تثبيت cloudflared
+```bash
+# Windows
+winget install --id Cloudflare.cloudflared
+
+# macOS
+brew install cloudflare/cloudflare/cloudflared
+
+# Linux
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+```
+
+### 2. تسجيل الدخول
+```bash
 cloudflared tunnel login
+```
 
-# إنشاء النفق (إذا لم يكن موجوداً)
+### 3. إنشاء النفق
+```bash
 cloudflared tunnel create attendance-venom
+```
 
-# إعداد DNS
+### 4. إعداد DNS
+```bash
 cloudflared tunnel route dns attendance-venom api.go4host.net
 ```
 
-### 4. تشغيل النظام
+### 5. تشغيل النفق
 ```bash
-# تشغيل مع Cloudflare Tunnel (الأفضل)
-start-whatsapp-web-js.bat
+cloudflared tunnel run --url http://localhost:3002 attendance-venom
+```
 
-# أو تشغيل يدوي
-npm run start:tunnel:ultimate
+أو إنشاء ملف config:
+```yaml
+# ~/.cloudflared/config.yml
+tunnel: attendance-venom
+credentials-file: ~/.cloudflared/[tunnel-id].json
 
-# تشغيل محلي فقط
-npm start
+ingress:
+  - hostname: api.go4host.net
+    service: http://localhost:3002
+  - service: http_status:404
+```
+
+ثم تشغيل:
+```bash
+cloudflared tunnel run attendance-venom
 ```
 
 ## الاستخدام
 
-### تشغيل سريع (Windows)
+### إصلاح مشكلة getMaybeMeUser
+
+إذا واجهت خطأ `Cannot read properties of undefined (reading 'getMaybeMeUser')`:
+
+```bash
+# إصلاح المشكلة وإعادة التشغيل
+npm run start:clean:enhanced
+
+# أو تشغيل الإصلاح منفصلاً
+npm run fix:getmaybemeuser
+npm run start:enhanced
+
+# اختبار الإصلاح
+npm run test:enhanced
+```
+
+### تشغيل محسن (Windows)
 ```bash
 # استخدم الملف المحسن
-start-whatsapp-web-js.bat
+start-enhanced.bat
 ```
 
-### تشغيل يدوي
+### تهيئة الواتساب
+1. شغّل الخادم
+2. شغّل Cloudflare Tunnel
+3. ستظهر QR Code في Terminal
+4. امسح QR Code بهاتفك
+5. انتظر رسالة التأكيد
+
+### اختبار الاتصال
 ```bash
-# 1. تثبيت المكتبات
-npm install
+# الاختبار العادي
+npm test
 
-# 2. تشغيل مع Tunnel
-npm run start:tunnel:ultimate
-
-# 3. اختبار النظام
-npm run test:simple
-```
-
-## مراقبة النظام
-
-### فحص الحالة
-```bash
-# فحص حالة WhatsApp
-curl http://localhost:3002/api/whatsapp/status
-
-# اختبار الخادم
-curl http://localhost:3002/api/test
-
-# معلومات الحساب
-curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/info
-```
-
-### الرسائل المهمة
-```
-✅ تم تشغيل WhatsApp Proxy Server بنجاح
-✅ تم التحقق من الهوية بنجاح
-🎉 WhatsApp Web جاهز بالكامل للإرسال!
-✅ Cloudflare Tunnel متصل
-🌍 الخادم متاح على: https://api.go4host.net
+# الاختبار المحسن (مع فحص getMaybeMeUser)
+npm run test:enhanced
 ```
 
 ## API Endpoints
@@ -136,28 +157,16 @@ curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/
 اختبار حالة الخادم
 
 ### POST /api/whatsapp/initialize
-تهيئة اتصال WhatsApp
-```bash
-curl -X POST -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/initialize
-```
+تهيئة اتصال الواتساب
 
 ### GET /api/whatsapp/status
-فحص حالة اتصال WhatsApp
-```bash
-curl http://localhost:3002/api/whatsapp/status
-```
-
-### GET /api/whatsapp/info
-جلب معلومات الحساب
-```bash
-curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/info
-```
+فحص حالة اتصال الواتساب
 
 ### POST /api/whatsapp/test-message
 إرسال رسالة اختبار
 ```json
 {
-  "phoneNumber": "201002246668",
+  "phoneNumber": "966501234567",
   "message": "رسالة اختبار"
 }
 ```
@@ -166,7 +175,7 @@ curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/
 إرسال رسالة واحدة
 ```json
 {
-  "phoneNumber": "201002246668",
+  "phoneNumber": "966501234567",
   "message": "نص الرسالة",
   "messageType": "custom"
 }
@@ -178,12 +187,12 @@ curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/
 {
   "messages": [
     {
-      "phoneNumber": "201002246668",
+      "phoneNumber": "966501234567",
       "message": "رسالة 1",
       "messageType": "absence"
     },
     {
-      "phoneNumber": "966501234567",
+      "phoneNumber": "966501234568",
       "message": "رسالة 2",
       "messageType": "performance"
     }
@@ -191,133 +200,52 @@ curl -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/
 }
 ```
 
+## الأمان
+
+- جميع الطلبات المحمية تتطلب `X-API-Key` في headers
+- CORS محدود للنطاقات المسموحة
+- Rate limiting مفعل (100 طلب/دقيقة)
+
 ## استكشاف الأخطاء
 
-### مشكلة: QR Code لا يظهر ❌
-**الحل:**
-```bash
-# تنظيف الجلسة
-npm run clean:ultimate
-start-whatsapp-web-js.bat
-```
+### مشكلة: QR Code لا يظهر
+- تأكد من تثبيت Chrome
+- تحقق من مسار Chrome في `.env`
 
-### مشكلة: فشل في الإرسال ❌
-**الحل:**
-```bash
-# التحقق من الحالة
-curl http://localhost:3002/api/whatsapp/status
+### مشكلة: انقطاع الاتصال
+- تحقق من استقرار الإنترنت
+- أعد تشغيل الخادم
 
-# إعادة التهيئة
-curl -X POST -H "X-API-Key: venom-ultimate-fix-2024" http://localhost:3002/api/whatsapp/initialize
-```
-
-### مشكلة: Cloudflare Tunnel لا يعمل ❌
-**الحل:**
-```bash
-# التحقق من الإعداد
-cloudflared tunnel list
-cloudflared tunnel info 9752631e-8b0d-48a8-b9c1-20f376ce578f
-
-# إعادة إنشاء النفق
-cloudflared tunnel delete attendance-venom
-cloudflared tunnel create attendance-venom
-cloudflared tunnel route dns attendance-venom api.go4host.net
-```
-
-## الرسائل المهمة
-
-### ✅ رسائل النجاح
-```
-✅ تم تشغيل WhatsApp Proxy Server بنجاح
-✅ تم التحقق من الهوية بنجاح
-🎉 WhatsApp Web جاهز بالكامل للإرسال!
-✅ Cloudflare Tunnel متصل
-🌍 الخادم متاح على: https://api.go4host.net
-👤 معلومات الحساب: الرقم، الاسم، البطارية
-```
-
-### ❌ رسائل الخطأ وحلولها
-```
-❌ WhatsApp غير متصل أو غير جاهز
-   الحل: انتظر اكتمال التحميل أو أعد التهيئة
-
-❌ الرقم غير مسجل في واتساب
-   الحل: تحقق من صحة الرقم
-
-❌ فشل في المصادقة
-   الحل: امسح QR Code جديد
-```
+### مشكلة: فشل إرسال الرسائل
+- تحقق من صحة أرقام الهواتف
+- تأكد من اتصال الواتساب
+- إذا ظهر خطأ getMaybeMeUser، استخدم: `npm run fix:getmaybemeuser`
+- انتظر رسالة "جاهز بالكامل للإرسال" قبل الاختبار
 
 ## الصيانة
 
 ### نسخ احتياطي
 ```bash
-# نسخ احتياطي شامل
-npm run backup:all
-
-# نسخ احتياطي للجلسات فقط
-npm run backup:sessions
+# نسخ احتياطي لملفات التوكن
+tar -czf tokens-backup-$(date +%Y%m%d).tar.gz tokens/
 ```
 
 ### تنظيف الجلسة
 ```bash
-# تنظيف شامل
-npm run clean:ultimate
-
-# تنظيف عادي
-npm run clean
+# حذف ملفات التوكن لإعادة البدء
+rm -rf tokens/
+mkdir tokens
 ```
 
-## الأداء
+## المراقبة
 
-### إعدادات الرسائل
-- تأخير 3 ثواني بين الرسائل
-- تأخير 5 ثواني للرسائل المجمعة
-- إعادة محاولة تلقائية (3 مرات)
-- فحص صحة الرقم قبل الإرسال
-
-### إعدادات الاتصال
-- LocalAuth للحفاظ على الجلسة
-- إعادة اتصال تلقائي
-- مراقبة مستمرة للحالة
-
-## مقارنة مع Venom-Bot
-
-| الميزة | WhatsApp-Web.js | Venom-Bot |
-|--------|----------------|-----------|
-| الاستقرار | ✅ ممتاز | ❌ مشاكل متكررة |
-| سهولة الاستخدام | ✅ بسيط | ❌ معقد |
-| مشاكل getMaybeMeUser | ✅ لا توجد | ❌ مشكلة مستمرة |
-| مشاكل WebSocket | ✅ لا توجد | ❌ أخطاء متكررة |
-| التحديثات | ✅ منتظمة | ❌ بطيئة |
-| الدعم | ✅ مجتمع نشط | ❌ دعم محدود |
-| الأداء | ✅ سريع | ❌ بطيء |
+- السجلات تُحفظ في مجلد `logs/`
+- مراقبة حالة الاتصال كل 30 ثانية
+- إعادة اتصال تلقائي عند الانقطاع
 
 ## الدعم
 
-### للمساعدة
-1. تحقق من السجلات في `logs/`
-2. شغّل `npm run test:simple`
-3. راجع رسائل Terminal
-4. استخدم `npm run clean:ultimate` للتنظيف
-
-### معلومات المطور
-- **المطور:** Ahmed Hosny
-- **الهاتف:** 01272774494 - 01002246668  
-- **البريد:** Sales@GO4Host.net
-- **الخدمة:** WhatsApp-Web.js v1.23.0
-
----
-
-## ملخص المميزات
-
-✅ **استقرار عالي بدون مشاكل**
-✅ **دعم Cloudflare Tunnel التلقائي** 
-✅ **API واضح ومفهوم**
-✅ **فحص صحة الأرقام**
-✅ **إعادة اتصال تلقائي**
-✅ **أداء محسن**
-✅ **مراقبة مستمرة للنظام**
-✅ **نسخ احتياطية تلقائية**
-
-🎯 **النتيجة:** نظام مستقر 100% بدون مشاكل تقنية
+للمساعدة أو الإبلاغ عن مشاكل:
+- تحقق من السجلات في Terminal
+- راجع ملف `logs/` للتفاصيل
+- تأكد من تحديث المكتبات

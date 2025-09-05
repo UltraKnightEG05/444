@@ -30,10 +30,6 @@ services:
         value: false
       - key: CHROME_PATH
         value: /usr/bin/google-chrome
-      - key: WHATSAPP_PROXY_URL
-        value: https://api.go4host.net/api
-      - key: WHATSAPP_PROXY_API_KEY
-        value: venom-ultimate-fix-2024
     
   # Frontend Service
   - type: web

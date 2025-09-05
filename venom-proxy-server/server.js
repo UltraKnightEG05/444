@@ -12,12 +12,12 @@ const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3002;
 
-console.log('🚀 بدء تشغيل خادم WhatsApp Proxy...');
+console.log('🚀 بدء تشغيل خادم Venom Proxy...');
 console.log('📍 المنفذ:', PORT);
 console.log('🌍 البيئة:', process.env.NODE_ENV || 'development');
 
 // إنشاء المجلدات المطلوبة
-const requiredDirs = ['./sessions', './logs', './backups'];
+const requiredDirs = ['./tokens', './logs'];
 requiredDirs.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -31,13 +31,7 @@ app.use(helmet());
 // إعدادات CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : [
-      'http://localhost:3001', 
-      'http://localhost:5173', 
-      'https://hossam-students-backend.onrender.com', 
-      'https://hossam-students-frontend.onrender.com',
-      'https://api.go4host.net'
-    ];
+  : ['http://localhost:3001', 'http://localhost:5173', 'https://hossam-students-backend.onrender.com', 'https://api.go4host.net'];
 
 app.use(cors({
   origin: allowedOrigins,
@@ -57,7 +51,7 @@ app.use(limiter);
 // Middleware للتحقق من API Key
 const authenticateAPI = (req, res, next) => {
   const apiKey = req.headers['x-api-key'] || req.headers['authorization'];
-  const expectedKey = process.env.API_SECRET_KEY || 'venom-ultimate-fix-2024';
+  const expectedKey = process.env.API_SECRET_KEY;
   
   if (!expectedKey) {
     console.warn('⚠️ لم يتم تعيين API_SECRET_KEY في متغيرات البيئة');
@@ -65,7 +59,7 @@ const authenticateAPI = (req, res, next) => {
   }
   
   if (!apiKey || apiKey !== expectedKey) {
-    console.log('❌ مفتاح API غير صحيح. المتوقع:', expectedKey, 'المستلم:', apiKey);
+    console.log('❌ مفتاح API غير صحيح:', apiKey);
     return res.status(401).json({ 
       success: false, 
       message: 'غير مصرح بالوصول - مفتاح API غير صحيح' 
@@ -77,35 +71,6 @@ const authenticateAPI = (req, res, next) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// تقديم QR Code كصفحة ويب
-app.get('/qr', (req, res) => {
-  const qrPath = path.join(__dirname, 'logs', 'qr-code.html');
-  if (fs.existsSync(qrPath)) {
-    res.sendFile(qrPath);
-  } else {
-    res.send(`
-      <html dir="rtl">
-        <head><title>QR Code - نظام الحضور</title></head>
-        <body style="font-family: Arial; text-align: center; padding: 50px;">
-          <h1>⏳ انتظار QR Code...</h1>
-          <p>QR Code لم يتم إنشاؤه بعد. يرجى الانتظار...</p>
-          <button onclick="window.location.reload()">🔄 تحديث</button>
-        </body>
-      </html>
-    `);
-  }
-});
-
-// تقديم صور QR Code
-app.get('/qr-image', (req, res) => {
-  const qrPath = path.join(__dirname, 'logs', 'latest-qr-code.png');
-  if (fs.existsSync(qrPath)) {
-    res.sendFile(qrPath);
-  } else {
-    res.status(404).send('QR Code غير متاح');
-  }
-});
 
 // إنشاء خدمة الواتساب
 const whatsappService = new WhatsAppService();
@@ -122,17 +87,16 @@ app.use((req, res, next) => {
 app.get('/api/test', (req, res) => {
   res.json({ 
     success: true, 
-    message: 'WhatsApp Proxy Server يعمل بشكل صحيح',
+    message: 'Venom Proxy Server يعمل بشكل صحيح',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    service: 'whatsapp-web.js'
+    version: '1.0.0'
   });
 });
 
 // تهيئة الواتساب
 app.post('/api/whatsapp/initialize', authenticateAPI, async (req, res) => {
   try {
-    console.log('🚀 طلب تهيئة WhatsApp-Web.js...');
+    console.log('🚀 طلب تهيئة الواتساب...');
     
     const result = await whatsappService.initialize();
     
@@ -145,14 +109,14 @@ app.post('/api/whatsapp/initialize', authenticateAPI, async (req, res) => {
     } else {
       res.status(500).json({
         success: false,
-        message: result.message || 'فشل في تهيئة WhatsApp'
+        message: result.message || 'فشل في تهيئة الواتساب'
       });
     }
   } catch (error) {
-    console.error('❌ خطأ في تهيئة WhatsApp:', error);
+    console.error('❌ خطأ في تهيئة الواتساب:', error);
     res.status(500).json({
       success: false,
-      message: 'خطأ في تهيئة WhatsApp: ' + error.message
+      message: 'خطأ في تهيئة الواتساب: ' + error.message
     });
   }
 });
@@ -160,25 +124,14 @@ app.post('/api/whatsapp/initialize', authenticateAPI, async (req, res) => {
 // فحص حالة الاتصال
 app.get('/api/whatsapp/status', (req, res) => {
   const status = whatsappService.getConnectionStatus();
-  
-  console.log('📊 فحص حالة WhatsApp من Frontend:', {
-    connected: status.connected,
-    ready: status.ready,
-    state: status.state,
-    service: status.service
-  });
-  
   res.json({
     success: true,
     data: {
       connected: status.connected,
       ready: status.ready,
-      state: status.state,
       qrCode: status.qrCode,
       lastActivity: status.lastActivity,
       retries: status.retries,
-      service: status.service,
-      version: status.version,
       timestamp: new Date().toISOString()
     }
   });
@@ -291,23 +244,6 @@ app.post('/api/whatsapp/send-bulk', authenticateAPI, async (req, res) => {
   }
 });
 
-// جلب معلومات الحساب
-app.get('/api/whatsapp/info', authenticateAPI, async (req, res) => {
-  try {
-    const info = await whatsappService.getClientInfo();
-    res.json({
-      success: true,
-      data: info
-    });
-  } catch (error) {
-    console.error('❌ خطأ في جلب معلومات الحساب:', error);
-    res.status(500).json({
-      success: false,
-      message: 'خطأ في جلب معلومات الحساب: ' + error.message
-    });
-  }
-});
-
 // قطع الاتصال
 app.post('/api/whatsapp/disconnect', authenticateAPI, async (req, res) => {
   try {
@@ -346,23 +282,22 @@ app.use('*', (req, res) => {
 
 // بدء الخادم
 app.listen(PORT, () => {
-  console.log('\n🎉 تم تشغيل WhatsApp Proxy Server بنجاح!');
+  console.log('\n🎉 تم تشغيل Venom Proxy Server بنجاح!');
   console.log(`🚀 الخادم يعمل على المنفذ ${PORT}`);
   console.log(`🔗 يمكن الوصول للخادم على: http://localhost:${PORT}`);
   console.log(`🔑 API Endpoint: http://localhost:${PORT}/api`);
-  console.log(`📱 الخدمة: WhatsApp-Web.js v1.23.0`);
   console.log('\n📋 للاختبار:');
   console.log(`   GET  http://localhost:${PORT}/api/test`);
   console.log(`   POST http://localhost:${PORT}/api/whatsapp/initialize`);
   console.log('\n⚠️  تذكر: أضف X-API-Key في headers للطلبات المحمية');
   
-  // تهيئة WhatsApp تلقائياً
+  // تهيئة الواتساب تلقائياً مع إصلاح getMaybeMeUser
   setTimeout(() => {
-    console.log('\n🔄 بدء تهيئة WhatsApp التلقائية...');
+    console.log('\n🔄 بدء تهيئة الواتساب التلقائية مع إصلاح getMaybeMeUser...');
     whatsappService.initialize().then(result => {
       if (result.success) {
-        console.log('✅ تم تهيئة WhatsApp تلقائياً');
-        console.log('🎯 النظام جاهز لاستقبال طلبات الإرسال');
+        console.log('✅ تم تهيئة الواتساب تلقائياً مع إصلاح getMaybeMeUser');
+        console.log('🎯 النظام جاهز لاستقبال طلبات الإرسال من Render');
       } else {
         console.log('⚠️ فشل في التهيئة التلقائية:', result.message);
         console.log('💡 يمكن التهيئة يدوياً عبر: POST /api/whatsapp/initialize');
@@ -370,7 +305,7 @@ app.listen(PORT, () => {
     }).catch(error => {
       console.error('❌ خطأ في التهيئة التلقائية:', error.message);
     });
-  }, 3000);
+  }, 5000); // زيادة التأخير لضمان استقرار الخادم
 });
 
 // معالجة الإغلاق الآمن

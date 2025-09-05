@@ -160,6 +160,7 @@ class ApiService {
   async getClasses() {
     return this.request('/classes');
   }
+
 }
 
 export const apiService = new ApiService();

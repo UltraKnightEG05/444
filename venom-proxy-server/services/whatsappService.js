@@ -1,5 +1,4 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const venom = require('venom-bot');
 const fs = require('fs-extra');
 const path = require('path');
 
@@ -7,417 +6,983 @@ class WhatsAppService {
   constructor() {
     this.client = null;
     this.isConnected = false;
-    this.isReady = false;
     this.isInitializing = false;
     this.qrCode = null;
-    this.lastActivity = null;
-    this.retries = 0;
+    this.connectionRetries = 0;
     this.maxRetries = 3;
-    this.sessionName = process.env.WHATSAPP_SESSION_NAME || 'attendance-system';
-    this.initializationTimeout = null;
-    
-    console.log('🚀 تهيئة WhatsApp-Web.js Service...');
-    console.log('📱 اسم الجلسة:', this.sessionName);
+    this.lastActivity = Date.now();
+    this.statusCheckInterval = null;
+    this.initializationPromise = null;
+    this.isReady = false;
+    this.readyCheckInterval = null;
+    this.wapiReady = false;
+    this.storeReady = false;
   }
 
   async initialize() {
-    if (this.isInitializing) {
-      console.log('⏳ WhatsApp قيد التهيئة بالفعل...');
-      return { success: false, message: 'جاري التهيئة بالفعل...' };
+    // منع التهيئة المتعددة
+    if (this.initializationPromise) {
+      console.log('⏳ انتظار التهيئة الجارية...');
+      return this.initializationPromise;
     }
 
-    if (this.isConnected && this.isReady) {
-      console.log('✅ WhatsApp متصل وجاهز بالفعل');
-      return { success: true, message: 'WhatsApp متصل بالفعل', alreadyConnected: true };
+    if (this.isConnected && this.client && this.isReady && this.wapiReady) {
+      console.log('✅ الواتساب متصل وجاهز بالفعل');
+      return { success: true, message: 'الواتساب متصل بالفعل', alreadyConnected: true };
     }
 
+    // إنشاء promise للتهيئة
+    this.initializationPromise = this._performInitialization();
+    
+    try {
+      const result = await this.initializationPromise;
+      return result;
+    } finally {
+      this.initializationPromise = null;
+    }
+  }
+
+  async _performInitialization() {
     this.isInitializing = true;
-    this.retries++;
+    this.stopStatusCheck();
+    this.stopReadyCheck();
 
     try {
-      console.log(`🚀 بدء تهيئة WhatsApp-Web.js (محاولة ${this.retries}/${this.maxRetries})...`);
+      console.log('🚀 بدء تهيئة الواتساب مع إصلاح getMaybeMeUser...');
       
-      await this.ensureDirectories();
+      // تنظيف الاتصال السابق
       await this.cleanup();
       
-      // إنشاء client جديد مع إعدادات محسنة
-      this.client = new Client({
-        authStrategy: new LocalAuth({
-          clientId: this.sessionName,
-          dataPath: './sessions'
-        }),
-        puppeteer: {
-          headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding',
-            '--disable-extensions',
-            '--disable-plugins',
-            '--disable-default-apps',
-            '--disable-sync',
-            '--disable-translate',
-            '--disable-background-networking',
-            '--disable-client-side-phishing-detection',
-            '--disable-hang-monitor',
-            '--disable-popup-blocking',
-            '--disable-prompt-on-repost',
-            '--metrics-recording-only',
-            '--no-default-browser-check',
-            '--safebrowsing-disable-auto-update',
-            '--enable-automation',
-            '--password-store=basic',
-            '--use-mock-keychain',
-            '--disable-blink-features=AutomationControlled',
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          ],
-          executablePath: process.env.CHROME_PATH,
-          timeout: 60000,
-          protocolTimeout: 60000
-        },
-        webVersionCache: {
-          type: 'remote',
-          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-        }
-      });
-
-      // إعداد event handlers
-      this.setupEventHandlers();
+      // التأكد من وجود المجلدات
+      await this.ensureDirectories();
       
-      // إعداد timeout للتهيئة
-      this.initializationTimeout = setTimeout(() => {
-        if (this.isInitializing) {
-          console.log('⏰ انتهت مهلة التهيئة - إعادة المحاولة...');
-          this.handleInitializationTimeout();
-        }
-      }, 120000); // دقيقتان
-      
-      // بدء التهيئة
-      console.log('🔄 بدء تهيئة WhatsApp Client...');
-      await this.client.initialize();
-      
-      return { 
-        success: true, 
-        message: 'تم بدء تهيئة WhatsApp بنجاح',
-        alreadyConnected: false 
+      // إعدادات محسنة للمتصفح مع إصلاح مشكلة getMaybeMeUser
+      const puppeteerOptions = {
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-field-trial-config',
+          '--disable-back-forward-cache',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--memory-pressure-off',
+          '--max_old_space_size=4096',
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-default-apps',
+          '--disable-background-networking',
+          '--disable-client-side-phishing-detection',
+          '--disable-hang-monitor',
+          '--disable-popup-blocking',
+          '--disable-prompt-on-repost',
+          '--disable-sync',
+          '--metrics-recording-only',
+          '--no-default-browser-check',
+          '--safebrowsing-disable-auto-update',
+          '--enable-automation',
+          '--password-store=basic',
+          '--use-mock-keychain',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-features=VizDisplayCompositor',
+          '--run-all-compositor-stages-before-draw',
+          '--disable-threaded-animation',
+          '--disable-threaded-scrolling',
+          '--disable-checker-imaging',
+          '--disable-new-content-rendering-timeout',
+          '--disable-image-animation-resync',
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ],
+        defaultViewport: { width: 1366, height: 768 },
+        ignoreHTTPSErrors: true,
+        slowMo: 150, // إبطاء أكثر لضمان تحميل كامل
+        timeout: 180000 // 3 دقائق
       };
 
-    } catch (error) {
-      console.error('❌ خطأ في تهيئة WhatsApp:', error.message);
-      this.isInitializing = false;
-      
-      if (this.initializationTimeout) {
-        clearTimeout(this.initializationTimeout);
+      // البحث عن Chrome في مسارات متعددة
+      const chromePaths = [
+        process.env.CHROME_PATH,
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/snap/bin/chromium'
+      ].filter(Boolean);
+
+      let chromeFound = false;
+      for (const chromePath of chromePaths) {
+        if (chromePath && await fs.pathExists(chromePath)) {
+          puppeteerOptions.executablePath = chromePath;
+          console.log('🌐 استخدام Chrome من:', chromePath);
+          chromeFound = true;
+          break;
+        }
+      }
+
+      if (!chromeFound) {
+        console.log('⚠️ لم يتم العثور على Chrome، سيتم استخدام المتصفح الافتراضي');
       }
       
-      await this.handleError(error);
+      // إعدادات venom محسنة لحل مشكلة getMaybeMeUser
+      const venomOptions = {
+        session: process.env.WHATSAPP_SESSION_NAME || 'attendance-system-proxy',
+        folderNameToken: process.env.TOKENS_PATH || './tokens',
+        mkdirFolderToken: '',
+        headless: 'new',
+        devtools: false,
+        useChrome: true,
+        debug: false,
+        logQR: true,
+        puppeteerOptions,
+        autoClose: 0,
+        createPathFileToken: true,
+        waitForLogin: true,
+        disableSpins: true,
+        disableWelcome: true,
+        timeout: 300000, // 5 دقائق
+        multidevice: true,
+        refreshQR: 15000,
+        autoCloseInterval: 0,
+        logQR: true,
+        disableBrowserFetcher: false,
+        waitForLogin: true,
+        waitForIncomingCall: false,
+        catchQR: true,
+        // إعدادات خاصة لحل مشكلة getMaybeMeUser
+        addProxy: [],
+        browserArgs: [],
+        statusFind: (statusSession, session) => {
+          console.log(`📊 حالة الجلسة: ${statusSession} | الجلسة: ${session}`);
+        }
+      };
       
-      // إعادة المحاولة إذا لم نصل للحد الأقصى
-      if (this.retries < this.maxRetries) {
-        console.log(`🔄 إعادة المحاولة خلال 10 ثواني... (${this.retries}/${this.maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        return this.initialize();
+      this.client = await venom.create(
+        venomOptions.session,
+        (base64Qr, asciiQR, attempts, urlCode) => {
+          console.log(`📱 QR Code جديد - المحاولة: ${attempts}`);
+          console.log('🔗 URL Code:', urlCode);
+          console.log('\n' + asciiQR + '\n');
+          this.qrCode = base64Qr;
+          
+          // حفظ QR Code كصورة
+          this.saveQRCode(base64Qr, attempts);
+          
+          if (attempts >= 5) {
+            console.log('⚠️ تم الوصول للحد الأقصى من محاولات QR Code');
+          }
+          
+          console.log('\n📋 خطوات المسح:');
+          console.log('1. افتح واتساب على هاتفك');
+          console.log('2. اذهب إلى: الإعدادات > الأجهزة المرتبطة');
+          console.log('3. اضغط على "ربط جهاز"');
+          console.log('4. امسح QR Code أعلاه');
+          console.log('5. انتظر رسالة التأكيد\n');
+        },
+        (statusSession, session) => {
+          console.log(`📊 تغيير حالة الجلسة: ${statusSession}`);
+          console.log(`📱 اسم الجلسة: ${session || 'غير محدد'}`);
+          
+          switch (statusSession) {
+            case 'isLogged':
+            case 'qrReadSuccess':
+            case 'chatsAvailable':
+              console.log('✅ تم الاتصال بالواتساب!');
+              this.isConnected = true;
+              this.isInitializing = false;
+              this.connectionRetries = 0;
+              this.lastActivity = Date.now();
+              // بدء فحص الجاهزية مع تأخير
+              setTimeout(() => {
+                this.startReadyCheck();
+              }, 5000);
+              break;
+            case 'notLogged':
+              this.isConnected = false;
+              this.isReady = false;
+              this.wapiReady = false;
+              this.storeReady = false;
+              console.log('❌ لم يتم تسجيل الدخول');
+              break;
+            case 'browserClose':
+            case 'noOpenBrowser':
+              this.isConnected = false;
+              this.isReady = false;
+              this.wapiReady = false;
+              this.storeReady = false;
+              console.log('🔒 تم إغلاق المتصفح أو فشل في فتحه');
+              if (this.isInitializing && this.connectionRetries < this.maxRetries) {
+                this.connectionRetries++;
+                console.log(`🔄 إعادة المحاولة ${this.connectionRetries}/${this.maxRetries}...`);
+                setTimeout(() => {
+                  if (this.isInitializing) {
+                    this._performInitialization();
+                  }
+                }, 10000);
+              }
+              break;
+            case 'qrReadFail':
+              console.log('❌ فشل في مسح QR Code');
+              break;
+            case 'autocloseCalled':
+              console.log('🔄 تم استدعاء الإغلاق التلقائي');
+              break;
+            case 'desconnectedMobile':
+              console.log('📱 انقطع الاتصال من الهاتف');
+              this.handleDisconnection();
+              break;
+            case 'initBrowser':
+              console.log('🌐 بدء تشغيل المتصفح...');
+              break;
+            default:
+              console.log(`ℹ️ حالة غير معروفة: ${statusSession}`);
+          }
+        },
+        venomOptions
+      );
+      
+      if (this.client) {
+        this.setupEventHandlers();
+        
+        // انتظار حتى يتم الاتصال مع timeout محسن
+        const timeout = 300000; // 5 دقائق
+        const startTime = Date.now();
+        
+        console.log('⏳ انتظار اكتمال الاتصال...');
+        
+        while (!this.isConnected && (Date.now() - startTime) < timeout && this.isInitializing) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        
+        if (this.isConnected) {
+          console.log('✅ تم الاتصال بالواتساب!');
+          
+          // انتظار إضافي لضمان تحميل WhatsApp Web بالكامل
+          console.log('⏳ انتظار تحميل WhatsApp Web بالكامل...');
+          await new Promise(resolve => setTimeout(resolve, 15000));
+          
+          // فحص وإعداد WAPI
+          await this.initializeWAPI();
+          
+          // انتظار الجاهزية الكاملة
+          console.log('⏳ انتظار جاهزية النظام للإرسال...');
+          let readyAttempts = 0;
+          const maxReadyAttempts = 30;
+          
+          while ((!this.isReady || !this.wapiReady) && readyAttempts < maxReadyAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            await this.checkFullReadiness();
+            readyAttempts++;
+            console.log(`🔍 محاولة جاهزية ${readyAttempts}/${maxReadyAttempts} - WAPI: ${this.wapiReady ? '✅' : '❌'} | Store: ${this.storeReady ? '✅' : '❌'} | Ready: ${this.isReady ? '✅' : '❌'}`);
+          }
+          
+          if (this.isReady && this.wapiReady) {
+            console.log('🎉 تم تهيئة الواتساب بنجاح وهو جاهز للإرسال!');
+            this.startStatusCheck();
+            return { success: true, message: 'تم تهيئة الواتساب بنجاح وهو جاهز للإرسال!' };
+          } else {
+            console.log('⏰ النظام غير جاهز للإرسال بعد انتهاء المهلة');
+            console.log(`📊 الحالة النهائية: WAPI: ${this.wapiReady} | Store: ${this.storeReady} | Ready: ${this.isReady}`);
+            return { success: false, message: 'النظام متصل لكن غير جاهز للإرسال. قد تحتاج لإعادة المحاولة.' };
+          }
+        } else {
+          this.isInitializing = false;
+          console.log('⏰ انتهت المهلة الزمنية للاتصال');
+          await this.cleanup();
+          return { success: false, message: 'انتهت المهلة الزمنية للاتصال. تحقق من QR Code وحاول مرة أخرى.' };
+        }
+      }
+      
+      this.isInitializing = false;
+      return { success: false, message: 'فشل في إنشاء جلسة الواتساب' };
+      
+    } catch (error) {
+      console.error('❌ خطأ في تهيئة الواتساب:', error);
+      this.isInitializing = false;
+      this.isConnected = false;
+      this.isReady = false;
+      this.wapiReady = false;
+      this.storeReady = false;
+      await this.cleanup();
+      
+      let errorMessage = error.message;
+      
+      if (error.message.includes('Failed to launch the browser process')) {
+        errorMessage = 'فشل في تشغيل المتصفح. تحقق من تثبيت Chrome ومسار CHROME_PATH في ملف .env';
+      } else if (error.message.includes('ECONNREFUSED')) {
+        errorMessage = 'فشل في الاتصال. تحقق من إعدادات الشبكة';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'انتهت المهلة الزمنية. حاول مرة أخرى';
+      } else if (error.message.includes('Protocol error')) {
+        errorMessage = 'خطأ في بروتوكول المتصفح. أعد تشغيل الخادم';
       }
       
       return { 
         success: false, 
-        message: `فشل في تهيئة WhatsApp بعد ${this.maxRetries} محاولات: ${error.message}` 
+        message: `خطأ في تهيئة الواتساب: ${errorMessage}` 
       };
     }
   }
 
-  async cleanup() {
-    try {
-      // إغلاق العميل السابق إذا كان موجوداً
-      if (this.client) {
-        try {
-          await this.client.destroy();
-        } catch (error) {
-          console.log('⚠️ خطأ في إغلاق العميل السابق:', error.message);
-        }
-        this.client = null;
-      }
-      
-      this.isConnected = false;
-      this.isReady = false;
-      this.qrCode = null;
-      
-      console.log('🧹 تم تنظيف الجلسة السابقة');
-    } catch (error) {
-      console.error('❌ خطأ في التنظيف:', error.message);
+  async ensureDirectories() {
+    const dirs = [
+      process.env.TOKENS_PATH || './tokens',
+      process.env.LOGS_PATH || './logs',
+      './backups'
+    ];
+    
+    for (const dir of dirs) {
+      await fs.ensureDir(dir);
+      console.log(`📁 تم التأكد من وجود المجلد: ${dir}`);
     }
   }
 
-  async handleInitializationTimeout() {
-    console.log('⏰ انتهت مهلة التهيئة - إعادة تعيين...');
-    
-    this.isInitializing = false;
-    
-    if (this.client) {
-      try {
-        await this.client.destroy();
-      } catch (error) {
-        console.log('⚠️ خطأ في إغلاق العميل:', error.message);
-      }
-      this.client = null;
-    }
-    
-    // إعادة المحاولة
-    if (this.retries < this.maxRetries) {
-      console.log('🔄 إعادة المحاولة بعد timeout...');
-      setTimeout(() => {
-        this.initialize();
-      }, 5000);
+  async saveQRCode(base64Qr, attempts) {
+    try {
+      const qrPath = path.join(process.env.LOGS_PATH || './logs', `qr-code-${attempts}.png`);
+      const base64Data = base64Qr.replace(/^data:image\/png;base64,/, '');
+      await fs.writeFile(qrPath, base64Data, 'base64');
+      console.log(`💾 تم حفظ QR Code في: ${qrPath}`);
+    } catch (error) {
+      console.error('❌ خطأ في حفظ QR Code:', error);
     }
   }
 
   setupEventHandlers() {
     if (!this.client) return;
 
-    // عند ظهور QR Code
-    this.client.on('qr', (qr) => {
-      console.log('\n📱 QR Code جديد - امسحه بهاتفك:');
-      console.log('🔗 QR Code Data:', qr.substring(0, 50) + '...');
-      
-      // عرض QR Code في Terminal مع إعدادات محسنة للـ PowerShell
-      try {
-        console.log('\n📱 محاولة عرض QR Code في Terminal...');
-        qrcode.generate(qr, { small: true });
-        console.log('\n✅ تم عرض QR Code أعلاه');
-      } catch (terminalError) {
-        console.log('⚠️ لا يمكن عرض QR Code في PowerShell');
-        console.log('💡 استخدم الطرق البديلة أدناه');
-      }
-      
-      this.qrCode = qr;
-      this.saveQRCode(qr).then(() => {
-        console.log('💾 تم حفظ QR Code كصورة في مجلد logs');
-        console.log('📂 افتح: logs/latest-qr-code.png');
-      });
-      
-      // إنشاء QR Code كـ HTML للعرض في المتصفح
-      this.createQRCodeHTML(qr).then(() => {
-        console.log('🌐 تم إنشاء صفحة QR Code: http://localhost:3002/qr');
-        
-        // فتح المتصفح تلقائياً بعد 3 ثواني
-        setTimeout(() => {
-          this.openQRInBrowser();
-        }, 3000);
-      });
-      
-      console.log('\n📋 خطوات المسح:');
-      console.log('1. افتح واتساب على هاتفك');
-      console.log('2. اذهب إلى: الإعدادات > الأجهزة المرتبطة');
-      console.log('3. اضغط على "ربط جهاز"');
-      console.log('4. امسح QR Code من:');
-      console.log('   • المتصفح: http://localhost:3002/qr (سيفتح تلقائياً)');
-      console.log('   • الصورة: logs/latest-qr-code.png');
-      console.log('5. انتظر رسالة التأكيد\n');
-    });
-
-    // عند تحميل المصادقة
-    this.client.on('loading_screen', (percent, message) => {
-      console.log(`⏳ تحميل WhatsApp Web: ${percent}% - ${message}`);
-    });
-
-    // عند المصادقة
-    this.client.on('authenticated', () => {
-      console.log('✅ تم التحقق من الهوية بنجاح!');
-      this.isConnected = true;
-    });
-
-    // عند فشل المصادقة
-    this.client.on('auth_failure', (msg) => {
-      console.error('❌ فشل في المصادقة:', msg);
-      this.isConnected = false;
-      this.isReady = false;
-      this.isInitializing = false;
-    });
-
-    // عند الجاهزية
-    this.client.on('ready', async () => {
-      console.log('🎉 WhatsApp Web جاهز بالكامل للإرسال!');
-      this.isConnected = true;
-      this.isReady = true;
-      this.isInitializing = false;
-      this.lastActivity = new Date().toISOString();
-      
-      if (this.initializationTimeout) {
-        clearTimeout(this.initializationTimeout);
-      }
-      
-      // الحصول على معلومات الحساب
-      try {
-        const info = await this.client.info;
-       const state = await this.client.getState();
-        console.log('👤 معلومات الحساب:');
-        console.log(`   📱 الرقم: ${info.wid.user}`);
-        console.log(`   👤 الاسم: ${info.pushname}`);
-        console.log(`   🔋 البطارية: ${info.battery}%`);
-       console.log(`   📶 حالة الاتصال: ${state}`);
-       console.log(`   📶 متصل: نعم`);
-        console.log(`   📱 المنصة: ${info.platform}`);
-      } catch (err) {
-        console.log('⚠️ لم يتم الحصول على معلومات الحساب:', err.message);
-      }
-    });
-
-    // عند قطع الاتصال
-    this.client.on('disconnected', (reason) => {
-      console.log('🔌 تم قطع الاتصال:', reason);
-      this.isConnected = false;
-      this.isReady = false;
-      this.isInitializing = false;
-      
-      if (this.initializationTimeout) {
-        clearTimeout(this.initializationTimeout);
-      }
-      
-      if (reason === 'LOGOUT') {
-        console.log('🔒 تم تسجيل الخروج من الجهاز');
-      } else if (reason === 'NAVIGATION') {
-        console.log('🔄 انقطاع مؤقت - سيتم إعادة الاتصال تلقائياً');
-      }
-    });
-
-    // عند استلام رسالة
-    this.client.on('message', (message) => {
-      this.lastActivity = new Date().toISOString();
-      
-      // رد تلقائي على رسائل الاختبار
-      if (message.body === '!ping') {
-        message.reply('pong - نظام الحضور يعمل بشكل صحيح ✅');
-      }
-    });
-
-    // معالجة الأخطاء
-    this.client.on('error', (error) => {
-      console.error('❌ خطأ في WhatsApp Client:', error.message);
-      this.handleError(error);
-    });
-  }
-
-  async sendMessage(phoneNumber, message, messageType = 'custom') {
     try {
-     if (!this.isReady) {
-       throw new Error('WhatsApp غير جاهز للإرسال. يرجى التأكد من مسح QR Code وانتظار رسالة "جاهز بالكامل".');
-     }
+      this.client.onMessage(async (message) => {
+        this.lastActivity = Date.now();
+        console.log('📨 رسالة واردة من:', message.from);
+      });
 
-      console.log(`📤 إرسال رسالة إلى: ${phoneNumber}`);
-      
-      const formattedNumber = this.formatPhoneNumber(phoneNumber);
-      console.log(`📱 الرقم المنسق: ${formattedNumber}`);
-      
-      // التحقق من صحة الرقم
-     try {
-       const isValidNumber = await this.client.isRegisteredUser(formattedNumber);
-       if (!isValidNumber) {
-         throw new Error(`الرقم ${phoneNumber} غير مسجل في واتساب`);
-       }
-     } catch (validationError) {
-       console.log('⚠️ تخطي فحص صحة الرقم:', validationError.message);
-     }
-      
-      // إرسال الرسالة
-      const result = await this.client.sendMessage(formattedNumber, message);
-      
-      this.lastActivity = new Date().toISOString();
-      
-      console.log('✅ تم إرسال الرسالة بنجاح:', result.id._serialized);
-      
-      return {
-        success: true,
-        messageId: result.id._serialized,
-        timestamp: new Date().toISOString()
-      };
-      
+      this.client.onStateChange((state) => {
+        console.log('🔄 تغيير حالة الاتصال:', state);
+        this.lastActivity = Date.now();
+        
+        if (state === 'CONFLICT' || state === 'UNLAUNCHED') {
+          console.log('⚠️ تعارض في الاتصال، محاولة إعادة الاتصال...');
+          this.handleDisconnection();
+        } else if (state === 'CONNECTED') {
+          this.isConnected = true;
+          this.connectionRetries = 0;
+          // بدء فحص الجاهزية عند الاتصال مع تأخير
+          setTimeout(() => {
+            this.startReadyCheck();
+          }, 10000);
+        } else if (state === 'DISCONNECTED') {
+          this.isConnected = false;
+          this.isReady = false;
+          this.wapiReady = false;
+          this.storeReady = false;
+          this.handleDisconnection();
+        }
+      });
+
+      this.client.onStreamChange((state) => {
+        console.log('📡 تغيير حالة البث:', state);
+        this.lastActivity = Date.now();
+        
+        if (state === 'DISCONNECTED') {
+          console.log('📡 انقطع البث، محاولة إعادة الاتصال...');
+          this.handleDisconnection();
+        }
+      });
+
     } catch (error) {
-      console.error('❌ خطأ في إرسال الرسالة:', error.message);
-      throw new Error(`فشل في إرسال الرسالة: ${error.message}`);
+      console.error('❌ خطأ في إعداد معالجات الأحداث:', error);
     }
   }
 
-  async sendBulkMessages(messages) {
+  // تهيئة WAPI بشكل صحيح لحل مشكلة getMaybeMeUser
+  async initializeWAPI() {
+    if (!this.client || !this.isConnected) {
+      return false;
+    }
+
     try {
-      console.log(`📤 إرسال ${messages.length} رسالة...`);
+      console.log('🔧 تهيئة WAPI لحل مشكلة getMaybeMeUser...');
       
-      if (!this.isConnected || !this.isReady) {
-        throw new Error('WhatsApp غير متصل أو غير جاهز');
+      // انتظار تحميل الصفحة بالكامل
+      await this.client.page.waitForSelector('[data-testid="chat-list"]', { timeout: 60000 });
+      console.log('✅ تم تحميل قائمة المحادثات');
+      
+      // انتظار إضافي لضمان تحميل جميع العناصر
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      // فحص وإصلاح WAPI
+      const wapiFixed = await this.client.page.evaluate(() => {
+        return new Promise((resolve) => {
+          let attempts = 0;
+          const maxAttempts = 20;
+          
+          const checkWAPI = () => {
+            attempts++;
+            console.log(`🔍 فحص WAPI - المحاولة ${attempts}/${maxAttempts}`);
+            
+            try {
+              // التحقق من وجود Store
+              if (!window.Store) {
+                console.log('❌ Store غير موجود');
+                if (attempts < maxAttempts) {
+                  setTimeout(checkWAPI, 2000);
+                  return;
+                }
+                resolve(false);
+                return;
+              }
+              
+              // التحقق من وجود WAPI
+              if (!window.WAPI) {
+                console.log('❌ WAPI غير موجود');
+                if (attempts < maxAttempts) {
+                  setTimeout(checkWAPI, 2000);
+                  return;
+                }
+                resolve(false);
+                return;
+              }
+              
+              // التحقق من دالة getMaybeMeUser
+              if (!window.Store.Conn || !window.Store.Conn.getMaybeMeUser) {
+                console.log('⚠️ getMaybeMeUser غير متوفر، محاولة إصلاح...');
+                
+                // محاولة إعادة تعريف الدالة
+                try {
+                  if (window.Store.Conn && !window.Store.Conn.getMaybeMeUser) {
+                    window.Store.Conn.getMaybeMeUser = function() {
+                      try {
+                        return window.Store.Conn.me || window.Store.Me || null;
+                      } catch (e) {
+                        console.error('خطأ في getMaybeMeUser:', e);
+                        return null;
+                      }
+                    };
+                    console.log('✅ تم إصلاح getMaybeMeUser');
+                  }
+                } catch (fixError) {
+                  console.error('❌ فشل في إصلاح getMaybeMeUser:', fixError);
+                }
+              }
+              
+              // التحقق من جاهزية WAPI للإرسال
+              if (window.WAPI && window.WAPI.sendMessage && typeof window.WAPI.sendMessage === 'function') {
+                console.log('✅ WAPI جاهز للإرسال');
+                
+                // اختبار بسيط للتأكد من عمل WAPI
+                try {
+                  const me = window.WAPI.getMe();
+                  console.log('✅ تم الحصول على معلومات المستخدم:', me ? 'نجح' : 'فشل');
+                  resolve(true);
+                } catch (testError) {
+                  console.error('❌ خطأ في اختبار WAPI:', testError);
+                  if (attempts < maxAttempts) {
+                    setTimeout(checkWAPI, 2000);
+                    return;
+                  }
+                  resolve(false);
+                }
+              } else {
+                console.log('❌ WAPI.sendMessage غير متوفر');
+                if (attempts < maxAttempts) {
+                  setTimeout(checkWAPI, 2000);
+                  return;
+                }
+                resolve(false);
+              }
+              
+            } catch (error) {
+              console.error('❌ خطأ في فحص WAPI:', error);
+              if (attempts < maxAttempts) {
+                setTimeout(checkWAPI, 2000);
+                return;
+              }
+              resolve(false);
+            }
+          };
+          
+          // بدء الفحص
+          checkWAPI();
+        });
+      });
+      
+      if (wapiFixed) {
+        this.wapiReady = true;
+        console.log('✅ تم إعداد WAPI بنجاح');
+        return true;
+      } else {
+        console.log('❌ فشل في إعداد WAPI');
+        return false;
       }
       
-      const results = [];
-      let successCount = 0;
-      let failedCount = 0;
+    } catch (error) {
+      console.error('❌ خطأ في تهيئة WAPI:', error);
+      return false;
+    }
+  }
+
+  // فحص جاهزية WhatsApp Web الكاملة
+  async checkFullReadiness() {
+    if (!this.client || !this.isConnected) {
+      this.isReady = false;
+      this.wapiReady = false;
+      this.storeReady = false;
+      return false;
+    }
+
+    try {
+      console.log('🔍 فحص الجاهزية الكاملة لـ WhatsApp Web...');
       
-      for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i];
-        console.log(`📱 إرسال رسالة ${i + 1}/${messages.length} إلى: ${msg.phoneNumber}`);
+      // فحص حالة الاتصال
+      const connectionState = await this.client.getConnectionState();
+      console.log('📡 حالة الاتصال:', connectionState);
+      
+      if (connectionState !== 'CONNECTED') {
+        this.isReady = false;
+        this.wapiReady = false;
+        this.storeReady = false;
+        return false;
+      }
+
+      // فحص شامل للجاهزية
+      const readinessCheck = await this.client.page.evaluate(() => {
+        return new Promise((resolve) => {
+          try {
+            // فحص العناصر الأساسية
+            const chatList = document.querySelector('[data-testid="chat-list"]');
+            const searchBox = document.querySelector('[data-testid="chat-list-search"]');
+            const mainPanel = document.querySelector('#main');
+            
+            // فحص Store
+            const storeReady = window.Store && 
+                              window.Store.Msg && 
+                              window.Store.Chat && 
+                              window.Store.Contact &&
+                              window.Store.Conn;
+            
+            // فحص WAPI مع التحقق من getMaybeMeUser
+            let wapiReady = false;
+            if (window.WAPI && window.WAPI.sendMessage && typeof window.WAPI.sendMessage === 'function') {
+              // التحقق من getMaybeMeUser
+              try {
+                if (window.Store.Conn && window.Store.Conn.getMaybeMeUser) {
+                  const me = window.Store.Conn.getMaybeMeUser();
+                  wapiReady = true;
+                  console.log('✅ getMaybeMeUser يعمل بشكل صحيح');
+                } else if (window.Store.Conn) {
+                  // محاولة إصلاح getMaybeMeUser
+                  window.Store.Conn.getMaybeMeUser = function() {
+                    try {
+                      return window.Store.Conn.me || window.Store.Me || window.Store.Conn.attributes || null;
+                    } catch (e) {
+                      console.error('خطأ في getMaybeMeUser المصلح:', e);
+                      return null;
+                    }
+                  };
+                  
+                  // اختبار الدالة المصلحة
+                  const testMe = window.Store.Conn.getMaybeMeUser();
+                  wapiReady = testMe !== null;
+                  console.log('🔧 تم إصلاح getMaybeMeUser:', wapiReady ? 'نجح' : 'فشل');
+                } else {
+                  console.log('❌ Store.Conn غير متوفر');
+                  wapiReady = false;
+                }
+              } catch (error) {
+                console.error('❌ خطأ في فحص getMaybeMeUser:', error);
+                wapiReady = false;
+              }
+            }
+            
+            // فحص إضافي للتأكد من جاهزية الإرسال
+            let sendReady = false;
+            if (wapiReady && storeReady) {
+              try {
+                // اختبار بسيط للتأكد من عمل دوال الإرسال
+                const testFunction = window.WAPI.getMe;
+                sendReady = typeof testFunction === 'function';
+              } catch (error) {
+                console.error('خطأ في اختبار دوال الإرسال:', error);
+                sendReady = false;
+              }
+            }
+            
+            console.log('🔍 نتائج فحص الجاهزية:', {
+              chatList: !!chatList,
+              searchBox: !!searchBox,
+              mainPanel: !!mainPanel,
+              storeReady: storeReady,
+              wapiReady: wapiReady,
+              sendReady: sendReady,
+              getMaybeMeUser: !!(window.Store.Conn && window.Store.Conn.getMaybeMeUser)
+            });
+            
+            resolve({
+              uiReady: !!(chatList && searchBox),
+              storeReady: storeReady,
+              wapiReady: wapiReady,
+              sendReady: sendReady,
+              fullReady: !!(chatList && storeReady && wapiReady && sendReady)
+            });
+            
+          } catch (error) {
+            console.error('خطأ في فحص الجاهزية:', error);
+            resolve({
+              uiReady: false,
+              storeReady: false,
+              wapiReady: false,
+              sendReady: false,
+              fullReady: false
+            });
+          }
+        });
+      });
+
+      this.storeReady = readinessCheck.storeReady;
+      this.wapiReady = readinessCheck.wapiReady;
+      this.isReady = readinessCheck.fullReady;
+
+      if (this.isReady && this.wapiReady) {
+        console.log('✅ WhatsApp Web جاهز بالكامل للإرسال!');
         
+        // اختبار نهائي للتأكد من عمل الإرسال
         try {
-          const result = await this.sendMessage(msg.phoneNumber, msg.message, msg.messageType);
-          results.push({
-            phoneNumber: msg.phoneNumber,
-            success: true,
-            messageId: result.messageId,
-            timestamp: result.timestamp
-          });
-          successCount++;
+          const hostDevice = await this.client.getHostDevice();
+          console.log('📱 معلومات الجهاز:', hostDevice);
+          return true;
+        } catch (error) {
+          console.log('❌ خطأ في الاختبار النهائي:', error.message);
+          this.isReady = false;
+          this.wapiReady = false;
+          return false;
+        }
+      } else {
+        console.log('⏳ WhatsApp Web لا يزال يحمل...', {
+          storeReady: this.storeReady,
+          wapiReady: this.wapiReady,
+          isReady: this.isReady
+        });
+        return false;
+      }
+
+    } catch (error) {
+      console.error('❌ خطأ في فحص الجاهزية الكاملة:', error);
+      this.isReady = false;
+      this.wapiReady = false;
+      this.storeReady = false;
+      return false;
+    }
+  }
+
+  startReadyCheck() {
+    this.stopReadyCheck();
+    
+    this.readyCheckInterval = setInterval(async () => {
+      if (!this.isReady && this.isConnected) {
+        await this.checkFullReadiness();
+      }
+    }, 5000); // كل 5 ثواني
+  }
+
+  stopReadyCheck() {
+    if (this.readyCheckInterval) {
+      clearInterval(this.readyCheckInterval);
+      this.readyCheckInterval = null;
+    }
+  }
+
+  startStatusCheck() {
+    this.stopStatusCheck();
+    
+    this.statusCheckInterval = setInterval(async () => {
+      try {
+        if (!this.client) {
+          this.isConnected = false;
+          this.isReady = false;
+          this.wapiReady = false;
+          this.storeReady = false;
+          return;
+        }
+
+        const state = await this.client.getConnectionState();
+        const isActive = state === 'CONNECTED' || state === 'OPENING' || state === 'OPEN';
+        
+        if (!isActive) {
+          console.log('⚠️ الاتصال غير نشط:', state);
+          this.handleDisconnection();
+          return;
+        }
+
+        // فحص صحة الجلسة
+        try {
+          await this.client.getHostDevice();
+          this.lastActivity = Date.now();
           
-          // تأخير بين الرسائل لتجنب الحظر
-          if (i < messages.length - 1) {
-            const delay = parseInt(process.env.BULK_MESSAGE_DELAY) || 5000;
-            console.log(`⏳ انتظار ${delay/1000} ثانية قبل الرسالة التالية...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+          // فحص الجاهزية إذا لم تكن جاهزة
+          if (!this.isReady || !this.wapiReady) {
+            await this.checkFullReadiness();
+          }
+        } catch (error) {
+          console.log('❌ فشل فحص صحة الجلسة:', error.message);
+          this.handleDisconnection();
+        }
+
+      } catch (error) {
+        console.error('❌ خطأ في فحص حالة الاتصال:', error);
+        this.handleDisconnection();
+      }
+    }, 30000); // كل 30 ثانية
+  }
+
+  stopStatusCheck() {
+    if (this.statusCheckInterval) {
+      clearInterval(this.statusCheckInterval);
+      this.statusCheckInterval = null;
+    }
+  }
+
+  handleDisconnection() {
+    console.log('🔄 معالجة انقطاع الاتصال...');
+    this.isConnected = false;
+    this.isReady = false;
+    this.wapiReady = false;
+    this.storeReady = false;
+    this.stopStatusCheck();
+    this.stopReadyCheck();
+    
+    console.log('ℹ️ يمكن إعادة التهيئة يدوياً عند الحاجة');
+  }
+
+  async sendMessage(phoneNumber, message, messageType = 'custom') {
+    // التحقق من الاتصال والجاهزية
+    if (!this.isConnected || !this.client) {
+      throw new Error('الواتساب غير متصل. يرجى التهيئة أولاً.');
+    }
+
+    if (!this.isReady || !this.wapiReady) {
+      console.log('⏳ WhatsApp Web لا يزال يحمل، انتظار الجاهزية...');
+      
+      // انتظار الجاهزية لمدة أقصاها 60 ثانية
+      const readyTimeout = 60000;
+      const startTime = Date.now();
+      
+      while ((!this.isReady || !this.wapiReady) && (Date.now() - startTime) < readyTimeout) {
+        await this.checkFullReadiness();
+        if (!this.isReady || !this.wapiReady) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+      
+      if (!this.isReady || !this.wapiReady) {
+        throw new Error('WhatsApp Web غير جاهز للإرسال. يرجى إعادة التهيئة.');
+      }
+    }
+
+    try {
+      // فحص حالة الاتصال قبل الإرسال
+      const state = await this.client.getConnectionState();
+      if (state !== 'CONNECTED') {
+        throw new Error('الاتصال غير مستقر. يرجى إعادة التهيئة.');
+      }
+
+      const formattedNumber = this.formatPhoneNumber(phoneNumber);
+      console.log(`📤 إرسال رسالة إلى ${formattedNumber}`);
+      
+      // التحقق من صحة الرقم قبل الإرسال
+      let isValidNumber;
+      try {
+        isValidNumber = await this.client.checkNumberStatus(formattedNumber);
+        if (!isValidNumber.exists) {
+          throw new Error(`الرقم ${phoneNumber} غير مسجل في الواتساب`);
+        }
+      } catch (checkError) {
+        console.warn('⚠️ لم يتم التحقق من صحة الرقم:', checkError.message);
+        // المتابعة بدون فحص الرقم
+      }
+
+      // محاولة إرسال الرسالة مع معالجة محسنة للأخطاء
+      let result;
+      let sendAttempts = 0;
+      const maxSendAttempts = 3;
+      
+      while (sendAttempts < maxSendAttempts) {
+        try {
+          sendAttempts++;
+          console.log(`📤 محاولة إرسال ${sendAttempts}/${maxSendAttempts}...`);
+          
+          // فحص WAPI قبل كل محاولة إرسال
+          const wapiCheck = await this.client.page.evaluate(() => {
+            try {
+              // التحقق من وجود getMaybeMeUser
+              if (!window.Store.Conn || !window.Store.Conn.getMaybeMeUser) {
+                // إعادة إنشاء الدالة
+                if (window.Store.Conn) {
+                  window.Store.Conn.getMaybeMeUser = function() {
+                    try {
+                      return window.Store.Conn.me || window.Store.Me || window.Store.Conn.attributes || null;
+                    } catch (e) {
+                      console.error('خطأ في getMaybeMeUser:', e);
+                      return null;
+                    }
+                  };
+                  console.log('🔧 تم إعادة إنشاء getMaybeMeUser');
+                }
+              }
+              
+              // اختبار الدالة
+              const me = window.Store.Conn.getMaybeMeUser();
+              return {
+                success: true,
+                hasMeUser: !!me,
+                wapiReady: !!(window.WAPI && window.WAPI.sendMessage)
+              };
+            } catch (error) {
+              console.error('خطأ في فحص WAPI:', error);
+              return {
+                success: false,
+                error: error.message
+              };
+            }
+          });
+          
+          if (!wapiCheck.success || !wapiCheck.wapiReady) {
+            console.log('❌ WAPI غير جاهز:', wapiCheck);
+            if (sendAttempts < maxSendAttempts) {
+              console.log('⏳ انتظار 5 ثواني قبل المحاولة التالية...');
+              await new Promise(resolve => setTimeout(resolve, 5000));
+              continue;
+            } else {
+              throw new Error('WAPI غير جاهز للإرسال بعد عدة محاولات');
+            }
           }
           
-        } catch (error) {
-          console.error(`❌ فشل في إرسال رسالة إلى ${msg.phoneNumber}:`, error.message);
-          results.push({
-            phoneNumber: msg.phoneNumber,
-            success: false,
-            error: error.message
-          });
-          failedCount++;
+          console.log('✅ WAPI جاهز، بدء الإرسال...');
+          result = await this.client.sendText(formattedNumber, message);
           
-          // تأخير أقل عند الفشل
-          if (i < messages.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          // إذا وصلنا هنا، فقد نجح الإرسال
+          break;
+          
+        } catch (sendError) {
+          console.error(`❌ خطأ في محاولة الإرسال ${sendAttempts}:`, sendError.message);
+          
+          // إذا كان الخطأ متعلق بـ getMaybeMeUser
+          if (sendError.message.includes('getMaybeMeUser') || sendError.message.includes('Cannot read properties of undefined')) {
+            console.log('🔄 إصلاح مشكلة getMaybeMeUser...');
+            
+            try {
+              // إعادة تحميل الصفحة
+              await this.client.page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+              console.log('🔄 تم إعادة تحميل الصفحة');
+              
+              // انتظار تحميل الواجهة
+              await new Promise(resolve => setTimeout(resolve, 15000));
+              
+              // إعادة تهيئة WAPI
+              await this.initializeWAPI();
+              
+              // إعادة فحص الجاهزية
+              await this.checkFullReadiness();
+              
+              if (this.isReady && this.wapiReady) {
+                console.log('✅ تم إصلاح المشكلة، المتابعة...');
+                continue; // المحاولة مرة أخرى
+              } else {
+                console.log('❌ فشل في إصلاح المشكلة');
+                if (sendAttempts >= maxSendAttempts) {
+                  throw new Error('فشل في إصلاح مشكلة getMaybeMeUser بعد عدة محاولات');
+                }
+              }
+            } catch (reloadError) {
+              console.error('❌ فشل في إعادة التحميل:', reloadError.message);
+              if (sendAttempts >= maxSendAttempts) {
+                throw new Error('فشل في إرسال الرسالة بعد إعادة التحميل. يرجى إعادة تهيئة الواتساب.');
+              }
+            }
+          } else {
+            // خطأ آخر غير متعلق بـ getMaybeMeUser
+            if (sendAttempts >= maxSendAttempts) {
+              throw sendError;
+            }
+          }
+          
+          // انتظار قبل المحاولة التالية
+          if (sendAttempts < maxSendAttempts) {
+            console.log(`⏳ انتظار 5 ثواني قبل المحاولة ${sendAttempts + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         }
       }
       
-      console.log(`📊 ملخص الإرسال: ${successCount} نجح، ${failedCount} فشل`);
+      if (!result) {
+        throw new Error('فشل في إرسال الرسالة بعد عدة محاولات');
+      }
+      
+      console.log('✅ تم إرسال الرسالة بنجاح:', result.id);
+      
+      this.lastActivity = Date.now();
+      
+      // انتظار قصير بين الرسائل لتجنب الحظر
+      const delay = parseInt(process.env.MESSAGE_DELAY) || 3000;
+      await new Promise(resolve => setTimeout(resolve, delay));
       
       return {
-        results,
-        summary: {
-          total: results.length,
-          success: successCount,
-          failed: failedCount
-        }
+        success: true,
+        messageId: result.id,
+        timestamp: new Date()
       };
       
     } catch (error) {
-      console.error('❌ خطأ في الإرسال المجمع:', error);
-      throw error;
+      console.error('❌ خطأ في إرسال الرسالة:', error);
+      
+      let errorMessage = error.message;
+      
+      if (error.message.includes('number not exists')) {
+        errorMessage = `الرقم ${phoneNumber} غير مسجل في الواتساب`;
+      } else if (error.message.includes('rate limit')) {
+        errorMessage = 'تم تجاوز حد الإرسال، يرجى المحاولة لاحقاً';
+      } else if (error.message.includes('blocked')) {
+        errorMessage = 'تم حظر الحساب مؤقتاً';
+      } else if (error.message.includes('Session closed') || error.message.includes('Protocol error')) {
+        errorMessage = 'انقطع الاتصال بالواتساب';
+        this.handleDisconnection();
+      } else if (error.message.includes('getMaybeMeUser') || error.message.includes('Cannot read properties of undefined')) {
+        errorMessage = 'خطأ في واجهة WhatsApp Web. يرجى إعادة التهيئة.';
+        this.isReady = false;
+        this.wapiReady = false;
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 
   async testMessage(phoneNumber, message = null) {
     try {
-      const testMsg = message || `📢 رسالة اختبار من نظام الحضور\n\nالوقت: ${new Date().toLocaleString('en-GB')}\n\n✅ WhatsApp-Web.js يعمل بشكل صحيح!`;
+      const testMsg = message || `🧪 رسالة اختبار من نظام إدارة الحضور
+
+هذه رسالة اختبار للتأكد من عمل النظام.
+
+الوقت: ${new Date().toLocaleString('en-GB')}
+الحالة: ${this.isConnected ? 'متصل' : 'غير متصل'}
+الجاهزية: ${this.isReady ? 'جاهز' : 'غير جاهز'}
+WAPI: ${this.wapiReady ? 'جاهز' : 'غير جاهز'}
+
+📚 نظام إدارة الحضور`;
       
       console.log(`🧪 اختبار إرسال رسالة إلى: ${phoneNumber}`);
-      
       const result = await this.sendMessage(phoneNumber, testMsg, 'test');
       
       return {
@@ -425,9 +990,8 @@ class WhatsAppService {
         message: 'تم إرسال رسالة الاختبار بنجاح',
         messageId: result.messageId
       };
-      
     } catch (error) {
-      console.error('❌ فشل اختبار الرسالة:', error.message);
+      console.error('❌ فشل اختبار الرسالة:', error);
       return {
         success: false,
         error: error.message
@@ -435,425 +999,213 @@ class WhatsAppService {
     }
   }
 
+  async sendBulkMessages(messages) {
+    const results = [];
+    let successCount = 0;
+    let failedCount = 0;
+    
+    console.log(`📤 بدء إرسال ${messages.length} رسالة...`);
+    
+    // التحقق من الجاهزية الكاملة قبل البدء
+    if (!this.isReady || !this.wapiReady) {
+      console.log('⏳ انتظار جاهزية WhatsApp Web الكاملة...');
+      
+      let readyAttempts = 0;
+      const maxReadyAttempts = 10;
+      
+      while ((!this.isReady || !this.wapiReady) && readyAttempts < maxReadyAttempts) {
+        await this.checkFullReadiness();
+        if (!this.isReady || !this.wapiReady) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        readyAttempts++;
+        console.log(`🔍 محاولة جاهزية ${readyAttempts}/${maxReadyAttempts} - WAPI: ${this.wapiReady ? '✅' : '❌'} | Ready: ${this.isReady ? '✅' : '❌'}`);
+      }
+      
+      if (!this.isReady || !this.wapiReady) {
+        throw new Error('WhatsApp Web غير جاهز للإرسال المجمع. يرجى إعادة التهيئة.');
+      }
+    }
+    
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      try {
+        console.log(`📤 إرسال رسالة ${i + 1}/${messages.length} إلى ${msg.phoneNumber}`);
+        
+        const result = await this.sendMessage(msg.phoneNumber, msg.message, msg.messageType || 'bulk');
+        results.push({
+          phoneNumber: msg.phoneNumber,
+          success: true,
+          messageId: result.messageId,
+          timestamp: result.timestamp
+        });
+        successCount++;
+        console.log(`✅ تم إرسال الرسالة ${successCount}/${messages.length}`);
+        
+        // انتظار أطول بين الرسائل في الإرسال المجمع
+        const bulkDelay = parseInt(process.env.BULK_MESSAGE_DELAY) || 5000;
+        await new Promise(resolve => setTimeout(resolve, bulkDelay));
+        
+      } catch (error) {
+        results.push({
+          phoneNumber: msg.phoneNumber,
+          success: false,
+          error: error.message
+        });
+        failedCount++;
+        console.error(`❌ فشل إرسال الرسالة ${successCount + failedCount}/${messages.length}:`, error.message);
+        
+        // إذا كان الخطأ متعلق بالجلسة، توقف
+        if (error.message.includes('انقطع الاتصال') || error.message.includes('غير متصل') || error.message.includes('getMaybeMeUser')) {
+          console.log('🛑 توقف الإرسال المجمع بسبب مشكلة في الاتصال');
+          
+          // محاولة إصلاح سريع
+          try {
+            console.log('🔄 محاولة إصلاح سريع...');
+            await this.initializeWAPI();
+            await this.checkFullReadiness();
+            
+            if (this.isReady && this.wapiReady) {
+              console.log('✅ تم الإصلاح، المتابعة...');
+              continue;
+            } else {
+              console.log('❌ فشل الإصلاح السريع');
+              break;
+            }
+          } catch (fixError) {
+            console.error('❌ فشل في الإصلاح السريع:', fixError.message);
+            break;
+          }
+        }
+        
+        // انتظار أطول في حالة الخطأ
+        await new Promise(resolve => setTimeout(resolve, 8000));
+      }
+    }
+    
+    console.log(`📊 ملخص الإرسال: ${successCount} نجح، ${failedCount} فشل`);
+    return {
+      success: true,
+      results,
+      summary: {
+        total: results.length,
+        success: successCount,
+        failed: failedCount
+      }
+    };
+  }
+
   formatPhoneNumber(phoneNumber) {
-    // إزالة الأحرف غير الرقمية
+    if (!phoneNumber) {
+      throw new Error('رقم الهاتف مطلوب');
+    }
+    
     let cleaned = phoneNumber.replace(/\D/g, '');
     
-    // معالجة أرقام مصر
-    if (cleaned.startsWith('01')) {
-      cleaned = '2' + cleaned;
+    if (cleaned.length < 10) {
+      throw new Error('رقم الهاتف قصير جداً');
     }
-    // معالجة أرقام السعودية
-    else if (cleaned.startsWith('05')) {
-      cleaned = '966' + cleaned.substring(1);
-    }
-    // إضافة كود الدولة إذا لم يكن موجوداً
-    else if (!cleaned.startsWith('966') && !cleaned.startsWith('2')) {
-      if (cleaned.length === 10 && cleaned.startsWith('5')) {
+    
+    // دعم الأرقام المصرية والسعودية
+    if (cleaned.startsWith('20')) {
+      if (!cleaned.match(/^20[0-9]{9,10}$/)) {
+        throw new Error('رقم الهاتف المصري غير صحيح');
+      }
+    } else if (cleaned.startsWith('966')) {
+      if (!cleaned.match(/^966[5][0-9]{8}$/)) {
+        throw new Error('رقم الهاتف السعودي غير صحيح');
+      }
+    } else {
+      if (cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+      }
+      
+      if (cleaned.startsWith('5') && cleaned.length === 9) {
         cleaned = '966' + cleaned;
-      } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      } else if (cleaned.startsWith('1') && cleaned.length >= 9) {
         cleaned = '20' + cleaned;
+      } else {
+        if (cleaned.length === 11 && cleaned.startsWith('1')) {
+          cleaned = '20' + cleaned;
+        } else if (cleaned.length === 9 && cleaned.startsWith('5')) {
+          cleaned = '966' + cleaned;
+        } else {
+          console.warn('⚠️ تنسيق رقم غير معروف، سيتم المحاولة كما هو:', cleaned);
+        }
       }
     }
     
     return cleaned + '@c.us';
   }
 
-  async ensureDirectories() {
-    const dirs = ['./sessions', './logs', './backups'];
-    for (const dir of dirs) {
-      await fs.ensureDir(dir);
-    }
-  }
-
-  async saveQRCode(qr) {
+  async cleanup() {
     try {
-      const qrPath = path.join('./logs', `qr-code-${Date.now()}.png`);
-      const QRCode = require('qrcode');
-      await QRCode.toFile(qrPath, qr, {
-        width: 512,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-      console.log(`💾 تم حفظ QR Code في: ${qrPath}`);
-      
-      // حفظ آخر QR Code للعرض في المتصفح
-      const latestQRPath = path.join('./logs', 'latest-qr-code.png');
-      await QRCode.toFile(latestQRPath, qr, {
-        width: 512,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ خطأ في حفظ QR Code:', error.message);
-    }
-  }
-
-  getConnectionStatus() {
-    return {
-      connected: this.isConnected || this.isReady,
-      ready: this.isReady,
-      state: this.isConnected && this.isReady ? 'CONNECTED' : 'DISCONNECTED',
-      initializing: this.isInitializing,
-      qrCode: this.qrCode,
-      lastActivity: this.lastActivity,
-      retries: this.retries,
-      maxRetries: this.maxRetries,
-      service: 'whatsapp-web.js',
-      version: '1.23.0'
-    };
-  }
-
-  async disconnect() {
-    try {
-      console.log('🔌 قطع اتصال WhatsApp...');
-      
-      if (this.initializationTimeout) {
-        clearTimeout(this.initializationTimeout);
-      }
+      this.stopStatusCheck();
+      this.stopReadyCheck();
       
       if (this.client) {
-        await this.client.destroy();
+        console.log('🧹 تنظيف الاتصال السابق...');
+        try {
+          await this.client.close();
+        } catch (error) {
+          console.log('⚠️ خطأ في إغلاق الاتصال السابق:', error.message);
+        }
         this.client = null;
       }
       
       this.isConnected = false;
       this.isReady = false;
+      this.wapiReady = false;
+      this.storeReady = false;
       this.isInitializing = false;
+      this.connectionRetries = 0;
       this.qrCode = null;
       
-      console.log('✅ تم قطع الاتصال بنجاح');
-      
     } catch (error) {
-      console.error('❌ خطأ في قطع الاتصال:', error.message);
+      console.error('❌ خطأ في تنظيف الاتصال:', error);
     }
   }
 
-  async handleError(error) {
-    const errorLog = {
-      timestamp: new Date().toISOString(),
-      error: error.message,
-      stack: error.stack,
-      connectionStatus: this.getConnectionStatus(),
-      service: 'whatsapp-web.js'
+  async disconnect() {
+    console.log('🔌 قطع اتصال الواتساب...');
+    await this.cleanup();
+    console.log('✅ تم قطع الاتصال بنجاح');
+  }
+
+  getConnectionStatus() {
+    return {
+      connected: this.isConnected && this.client !== null,
+      ready: this.isReady,
+      wapiReady: this.wapiReady,
+      storeReady: this.storeReady,
+      qrCode: this.qrCode,
+      lastActivity: this.lastActivity,
+      retries: this.connectionRetries
     };
-    
-    const logPath = path.join('./logs', 'whatsapp-errors.json');
-    let errors = [];
-    
-    try {
-      if (await fs.pathExists(logPath)) {
-        errors = await fs.readJson(logPath);
-      }
-    } catch (e) {
-      console.error('خطأ في قراءة ملف الأخطاء:', e.message);
-    }
-    
-    errors.push(errorLog);
-    
-    // الاحتفاظ بآخر 50 خطأ فقط
-    if (errors.length > 50) {
-      errors = errors.slice(-50);
-    }
-    
-    try {
-      await fs.writeJson(logPath, errors, { spaces: 2 });
-    } catch (e) {
-      console.error('خطأ في كتابة ملف الأخطاء:', e.message);
-    }
   }
 
-  // دوال إضافية لـ WhatsApp-Web.js
-  async getChats() {
+  async validateConnection() {
+    if (!this.client || !this.isConnected) {
+      return false;
+    }
+
     try {
-      if (!this.isReady) {
-        throw new Error('WhatsApp غير جاهز');
+      const state = await this.client.getConnectionState();
+      const isValid = state === 'CONNECTED';
+      
+      if (!isValid) {
+        console.log('⚠️ الاتصال غير صالح:', state);
+        this.handleDisconnection();
+      } else if (!this.isReady || !this.wapiReady) {
+        // إذا كان متصل لكن غير جاهز، فحص الجاهزية
+        await this.checkFullReadiness();
       }
       
-      const chats = await this.client.getChats();
-      return chats;
+      return isValid && this.isReady && this.wapiReady;
     } catch (error) {
-      console.error('❌ خطأ في جلب المحادثات:', error.message);
-      return [];
-    }
-  }
-
-  async getContacts() {
-    try {
-      if (!this.isReady) {
-        throw new Error('WhatsApp غير جاهز');
-      }
-      
-      const contacts = await this.client.getContacts();
-      return contacts;
-    } catch (error) {
-      console.error('❌ خطأ في جلب جهات الاتصال:', error.message);
-      return [];
-    }
-  }
-
-  async sendMedia(phoneNumber, mediaPath, caption = '') {
-    try {
-      if (!this.isReady) {
-        throw new Error('WhatsApp غير جاهز');
-      }
-
-      const formattedNumber = this.formatPhoneNumber(phoneNumber);
-      const media = MessageMedia.fromFilePath(mediaPath);
-      
-      const result = await this.client.sendMessage(formattedNumber, media, { caption });
-      
-      console.log('✅ تم إرسال الوسائط بنجاح');
-      return {
-        success: true,
-        messageId: result.id._serialized
-      };
-      
-    } catch (error) {
-      console.error('❌ خطأ في إرسال الوسائط:', error.message);
-      throw error;
-    }
-  }
-
-  async getClientInfo() {
-    try {
-      if (!this.isReady) {
-        return null;
-      }
-      
-      const info = await this.client.info;
-      return {
-        phone: info.wid.user,
-        name: info.pushname,
-        battery: info.battery,
-        connected: info.connected,
-        platform: info.platform
-      };
-    } catch (error) {
-      console.error('❌ خطأ في جلب معلومات الحساب:', error.message);
-      return null;
-    }
-  }
-
-  async createQRCodeHTML(qr) {
-    try {
-      const QRCode = require('qrcode');
-      const qrDataURL = await QRCode.toDataURL(qr, {
-        width: 512,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-      
-      const htmlContent = `
-<!DOCTYPE html>
-<html dir="rtl">
-<head>
-    <title>QR Code - نظام الحضور</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="30">
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 600px;
-        }
-        .title {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 28px;
-        }
-        .qr-code {
-            margin: 20px 0;
-            border: 3px solid #f0f0f0;
-            border-radius: 15px;
-            padding: 20px;
-            background: #fafafa;
-        }
-        .qr-code img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-        }
-        .instructions {
-            background: #e3f2fd;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: right;
-        }
-        .step {
-            margin: 10px 0;
-            padding: 10px;
-            background: white;
-            border-radius: 8px;
-            border-right: 4px solid #2196f3;
-            font-size: 16px;
-        }
-        .status {
-            background: #4caf50;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            display: inline-block;
-            margin: 10px 0;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        .refresh-btn {
-            background: #2196f3;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px;
-            transition: background 0.3s;
-        }
-        .refresh-btn:hover {
-            background: #1976d2;
-        }
-        .warning {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            color: #856404;
-        }
-        .success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            color: #155724;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 class="title">🔗 ربط واتساب - نظام الحضور</h1>
-        <div class="status">✅ WhatsApp-Web.js جاهز للربط</div>
-        
-        <div class="warning">
-            <strong>⚠️ مهم:</strong> لا تفتح WhatsApp Web في متصفح آخر أثناء الربط
-        </div>
-        
-        <div class="qr-code">
-            <img src="${qrDataURL}" alt="QR Code" />
-        </div>
-        
-        <div class="instructions">
-            <h3>📋 خطوات الربط:</h3>
-            <div class="step">1️⃣ افتح واتساب على هاتفك</div>
-            <div class="step">2️⃣ اذهب إلى: الإعدادات ← الأجهزة المرتبطة</div>
-            <div class="step">3️⃣ اضغط على "ربط جهاز"</div>
-            <div class="step">4️⃣ امسح QR Code أعلاه</div>
-            <div class="step">5️⃣ انتظر رسالة التأكيد</div>
-        </div>
-        
-        <div class="success">
-            <strong>💡 نصيحة:</strong> إذا لم يعمل المسح، اضغط "تحديث QR Code" أدناه
-        </div>
-        
-        <button class="refresh-btn" onclick="window.location.reload()">🔄 تحديث QR Code</button>
-        <button class="refresh-btn" onclick="checkStatus()">📊 فحص الحالة</button>
-        <button class="refresh-btn" onclick="window.open('logs/latest-qr-code.png')">🖼️ فتح الصورة</button>
-        
-        <p><strong>📱 الوقت:</strong> ${new Date().toLocaleString('ar-EG')}</p>
-        <p><strong>🌐 الخادم:</strong> http://localhost:3002</p>
-        <p><strong>🌍 Tunnel:</strong> https://api.go4host.net</p>
-    </div>
-    
-    <script>
-        // تحديث تلقائي كل 45 ثانية
-        setTimeout(() => {
-            window.location.reload();
-        }, 45000);
-        
-        function checkStatus() {
-            fetch('/api/whatsapp/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.data.connected && data.data.ready) {
-                        document.body.innerHTML = '<div style="text-align:center;padding:50px;background:#d4edda;color:#155724;font-size:24px;"><h1>🎉 تم الربط بنجاح!</h1><p>يمكنك إغلاق هذه النافذة والعودة للنظام</p></div>';
-                    } else {
-                        alert('⏳ لا يزال في انتظار المسح...');
-                    }
-                })
-                .catch(error => {
-                    alert('❌ خطأ في فحص الحالة');
-                });
-        }
-        
-        // فحص تلقائي كل 10 ثواني
-        setInterval(() => {
-            fetch('/api/whatsapp/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.data.connected && data.data.ready) {
-                        document.body.innerHTML = '<div style="text-align:center;padding:50px;background:#d4edda;color:#155724;font-size:24px;"><h1>🎉 تم الربط بنجاح!</h1><p>يمكنك إغلاق هذه النافذة والعودة للنظام</p><button onclick="window.close()" style="padding:10px 20px;font-size:16px;background:#28a745;color:white;border:none;border-radius:5px;cursor:pointer;">إغلاق النافذة</button></div>';
-                    }
-                });
-        }, 10000);
-    </script>
-</body>
-</html>`;
-      
-      await fs.writeFile('./logs/qr-code.html', htmlContent);
-      console.log('🌐 تم إنشاء صفحة QR Code: http://localhost:3002/qr');
-      
-    } catch (error) {
-      console.error('❌ خطأ في إنشاء QR Code HTML:', error.message);
-    }
-  }
-
-  openQRInBrowser() {
-    try {
-      const { execSync } = require('child_process');
-      const qrURL = 'http://localhost:3002/qr';
-      
-      console.log('🌐 فتح QR Code في المتصفح...');
-      
-      if (process.platform === 'win32') {
-        execSync(`start "" "${qrURL}"`, { stdio: 'ignore' });
-      } else if (process.platform === 'darwin') {
-        execSync(`open ${qrURL}`, { stdio: 'ignore' });
-      } else {
-        execSync(`xdg-open ${qrURL}`, { stdio: 'ignore' });
-      }
-      
-      console.log('✅ تم فتح QR Code في المتصفح');
-      console.log(`🔗 الرابط: ${qrURL}`);
-      
-    } catch (error) {
-      console.error('❌ خطأ في فتح المتصفح:', error.message);
-      console.log(`💡 افتح الرابط يدوياً: http://localhost:3002/qr`);
+      console.error('❌ خطأ في التحقق من صحة الاتصال:', error);
+      this.handleDisconnection();
+      return false;
     }
   }
 }

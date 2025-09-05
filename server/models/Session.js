@@ -155,6 +155,7 @@ static async getSessionReports(sessionId) {
   return await executeQuery(query, [sessionId]);
 }
 
+
 }
 
 module.exports = Session;
