@@ -31,6 +31,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { icon: GraduationCap, label: 'إدارة المعلمين', id: 'teachers' },
     { icon: Calendar, label: 'إدارة الحصص', id: 'sessions' },
     { icon: FileText, label: 'التقارير', id: 'reports' },
+    { icon: FileText, label: 'حالة التقارير', id: 'sessions-reports' },
     { icon: MessageSquare, label: 'إدارة الواتساب', id: 'whatsapp' },
     { icon: Settings, label: 'الإعدادات', id: 'settings' },
     { icon: Users, label: 'إدارة المستخدمين', id: 'users' },

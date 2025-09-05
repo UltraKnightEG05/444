@@ -214,6 +214,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 processed[field] = new Date();
               }
             }
+            if (item.id === 'sessions-reports' && !hasPermission('reports')) {
+              return null;
+            }
           });
           
           return processed;

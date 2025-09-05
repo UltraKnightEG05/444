@@ -12,6 +12,7 @@ import { ReportsManagement } from './components/ReportsManagement';
 import { WhatsAppManagement } from './components/WhatsAppManagement';
 import { UsersManagement } from './components/UsersManagement';
 import { SettingsManagement } from './components/SettingsManagement';
+import { SessionsReports } from './components/SessionsReports';
 
 function AppContent() {
   const { currentUser, currentPage } = useApp();
@@ -39,6 +40,8 @@ function AppContent() {
         return <ReportsManagement />;
       case 'whatsapp':
         return <WhatsAppManagement />;
+      case 'sessions-reports':
+        return <SessionsReports />;
       case 'settings':
         return <SettingsManagement />;
       case 'users':
