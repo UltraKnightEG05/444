@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Session = require('../models/Session');
 const SessionReportStatus = require('../models/SessionReportStatus');
+const SessionReportStatus = require('../models/SessionReportStatus');
 const Location = require('../models/Location');
 const Subject = require('../models/Subject');
 const { executeQuery } = require('../config/database');
@@ -1133,6 +1134,59 @@ router.get('/reports', async (req, res) => {
   } catch (error) {
     console.error('خطأ في جلب التقارير:', error);
     res.status(500).json({ success: false, message: 'خطأ في جلب البيانات' });
+  }
+});
+
+// جلب حالة إرسال التقارير لجميع الحصص
+router.get('/reports/session-status', async (req, res) => {
+  try {
+    console.log('📊 جلب حالة إرسال التقارير لجميع الحصص...');
+    const statuses = await SessionReportStatus.getAll();
+    console.log('✅ تم جلب حالة التقارير:', statuses.length, 'حصة');
+    res.json({ success: true, data: statuses });
+  } catch (error) {
+    console.error('Error fetching session report statuses:', error);
+    res.status(500).json({ success: false, message: 'خطأ في جلب حالة التقارير' });
+  }
+});
+
+// جلب تفاصيل إرسال التقارير لحصة معينة
+router.get('/reports/session-status/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    console.log('📊 جلب تفاصيل إرسال التقارير للحصة:', sessionId);
+    
+    const status = await SessionReportStatus.getBySessionId(sessionId);
+    const details = await SessionReportStatus.getSessionReportDetails(sessionId);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        status,
+        details
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching session report details:', error);
+    res.status(500).json({ success: false, message: 'خطأ في جلب تفاصيل التقارير' });
+  }
+});
+
+// إعادة تعيين حالة إرسال التقارير
+router.post('/reports/session-status/:sessionId/reset', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    console.log('🔄 إعادة تعيين حالة إرسال التقارير للحصة:', sessionId);
+    
+    await SessionReportStatus.resetReportStatus(sessionId);
+    
+    res.json({ 
+      success: true, 
+      message: 'تم إعادة تعيين حالة إرسال التقارير بنجاح'
+    });
+  } catch (error) {
+    console.error('Error resetting session report status:', error);
+    res.status(500).json({ success: false, message: 'خطأ في إعادة تعيين حالة التقارير' });
   }
 });
 
