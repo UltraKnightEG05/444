@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Session = require('../models/Session');
+const SessionReportStatus = require('../models/SessionReportStatus');
 const Location = require('../models/Location');
 const Subject = require('../models/Subject');
 const { executeQuery } = require('../config/database');
@@ -1444,8 +1445,14 @@ router.post('/whatsapp/send-session-report', async (req, res) => {
       return res.status(400).json({ success: false, message: 'معرف الحصة مطلوب' });
     }
     
+    // تحديث حالة الإرسال إلى "جاري الإرسال"
+    await SessionReportStatus.markAsSending(sessionId, 0);
+    
     console.log('📤 بدء إرسال تقرير الحصة:', sessionId);
     const result = await whatsappService.sendSessionReport(sessionId);
+    
+    // تحديث حالة الإرسال بناءً على النتيجة
+    await SessionReportStatus.markAsCompleted(sessionId, result);
     
     console.log('📊 نتيجة الإرسال:', result);
     res.json({ 
@@ -1529,7 +1536,26 @@ router.get('/dashboard/stats', async (req, res) => {
       HAVING (SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) / COUNT(*)) * 100 < 70
     `);
     console.log('📊 طلب حالة WhatsApp-Web.js...');
-    const detailedStatus = await whatsappService.getDetailedStatus();
+    const sessionsQuery = `
+      SELECT s.*, c.name as class_name, t.name as teacher_name, 
+             sub.name as subject_name, l.name as location_name, l.room_number,
+             srs.status as report_status,
+             srs.total_students as report_total_students,
+             srs.successful_sends as report_successful_sends,
+             srs.failed_sends as report_failed_sends,
+             srs.last_attempt_at as report_last_attempt,
+             srs.completed_at as report_completed_at,
+             srs.error_message as report_error_message
+      FROM sessions s
+      JOIN classes c ON s.class_id = c.id
+      LEFT JOIN teachers t ON c.teacher_id = t.id
+      LEFT JOIN subjects sub ON c.subject_id = sub.id
+      LEFT JOIN locations l ON s.location_id = l.id
+      LEFT JOIN session_reports_status srs ON s.id = srs.session_id
+      ORDER BY s.start_time DESC
+    `;
+    
+    const sessions = await executeQuery(sessionsQuery);
     const isConnected = whatsappService.getConnectionStatus();
     
     res.json({
@@ -1545,6 +1571,62 @@ router.get('/dashboard/stats', async (req, res) => {
         todayAbsent: todayAttendance[0].absent || 0,
         error: detailedStatus.error || null
       }
+// جلب حالة إرسال التقارير لحصة معينة
+router.get('/sessions/:id/report-status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await SessionReportStatus.getBySessionId(id);
+    
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('❌ خطأ في جلب حالة التقارير:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في جلب حالة التقارير: ' + error.message
+    });
+  }
+});
+
+// إعادة تعيين حالة إرسال التقارير
+router.post('/sessions/:id/reset-report-status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await SessionReportStatus.resetReportStatus(id);
+    
+    res.json({
+      success: true,
+      message: 'تم إعادة تعيين حالة إرسال التقارير'
+    });
+  } catch (error) {
+    console.error('❌ خطأ في إعادة تعيين حالة التقارير:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في إعادة تعيين حالة التقارير: ' + error.message
+    });
+  }
+});
+
+// جلب تقرير شامل لحالة إرسال التقارير
+router.get('/reports/session-reports-status', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const report = await SessionReportStatus.getComprehensiveReport(startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    console.error('❌ خطأ في جلب تقرير حالة التقارير:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في جلب تقرير حالة التقارير: ' + error.message
+    });
+  }
+});
     });
   } catch (error) {
     console.error('خطأ في جلب الإحصائيات:', error);
@@ -1610,6 +1692,15 @@ router.post('/whatsapp/test-message', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'خطأ في اختبار الرسالة: ' + error.message
+    
+    // تحديث حالة الإرسال إلى "فشل"
+    if (req.body.sessionId) {
+      await SessionReportStatus.createOrUpdate(req.body.sessionId, {
+        status: 'failed',
+        errorMessage: error.message
+      });
+    }
+    
     });
   }
 });

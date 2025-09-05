@@ -1,5 +1,6 @@
 const { executeQuery } = require('../config/database');
 const WhatsAppProxyService = require('./whatsappProxyService');
+const SessionReportStatus = require('../models/SessionReportStatus');
 
 class WhatsAppService extends WhatsAppProxyService {
   constructor() {
@@ -26,6 +27,9 @@ class WhatsAppService extends WhatsAppProxyService {
   async sendSessionReport(sessionId) {
     try {
       console.log('📊 بدء إرسال تقرير الحصة:', sessionId);
+      
+      // تحديث حالة الإرسال إلى "جاري الإرسال"
+      await SessionReportStatus.markAsSending(sessionId, 0);
       
       // التحقق من حالة الاتصال
       const isConnected = await this.checkConnection();
@@ -83,6 +87,14 @@ class WhatsAppService extends WhatsAppProxyService {
       
       const students = await executeQuery(studentsQuery, [sessionId, sessionId, session.class_id]);
       console.log(`👥 عدد الطلاب المؤهلين للإرسال: ${students.length}`);
+      
+      // تحديث العدد الإجمالي للطلاب
+      await SessionReportStatus.createOrUpdate(sessionId, {
+        status: 'sending',
+        totalStudents: students.length,
+        successfulSends: 0,
+        failedSends: 0
+      });
       
       const results = [];
       const sessionDate = new Date(session.start_time).toLocaleDateString('en-GB');
@@ -196,6 +208,15 @@ class WhatsAppService extends WhatsAppProxyService {
           studentId: student.id,
           studentName: student.name
         });
+        
+        // إضافة تفاصيل الإرسال لقاعدة البيانات
+        await SessionReportStatus.addStudentReportDetail(
+          sessionId,
+          student.id,
+          student.parent_phone,
+          messageType,
+          message
+        );
       }
       
       // إرسال الرسائل بشكل مجمع
@@ -212,6 +233,15 @@ class WhatsAppService extends WhatsAppProxyService {
           for (const result of bulkResult.results) {
             const messageData = messagesToSend.find(m => m.phoneNumber === result.phoneNumber);
             if (messageData) {
+              // تحديث حالة إرسال الطالب
+              await SessionReportStatus.updateStudentReportStatus(
+                sessionId,
+                messageData.studentId,
+                result.success ? 'sent' : 'failed',
+                result.messageId || null,
+                result.error || null
+              );
+              
               try {
                 await executeQuery(
                   'INSERT INTO whatsapp_logs (student_id, session_id, message_type, message, phone_number, status) VALUES (?, ?, ?, ?, ?, ?)',
@@ -229,6 +259,14 @@ class WhatsAppService extends WhatsAppProxyService {
       
       console.log(`📊 ملخص الإرسال: ${sentCount} نجح، ${failedCount} فشل من أصل ${messagesToSend.length} رسالة`);
       
+      // تحديث الحالة النهائية
+      await SessionReportStatus.markAsCompleted(sessionId, {
+        totalStudents: messagesToSend.length,
+        sentMessages: sentCount,
+        failedMessages: failedCount,
+        results: bulkResult.results
+      });
+      
       return {
         success: true,
         totalStudents: messagesToSend.length,
@@ -243,6 +281,13 @@ class WhatsAppService extends WhatsAppProxyService {
       
     } catch (error) {
       console.error('❌ خطأ في إرسال تقرير الحصة:', error);
+      
+      // تحديث حالة الإرسال إلى "فشل"
+      await SessionReportStatus.createOrUpdate(sessionId, {
+        status: 'failed',
+        errorMessage: error.message
+      });
+      
       throw error;
     }
   }
