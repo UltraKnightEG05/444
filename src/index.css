@@ -235,6 +235,11 @@ body {
 .pagination-btn-disabled {
   @apply opacity-50 cursor-not-allowed;
 }
+.pagination > div {
+  max-width: 500px; /* أو 100% حسب الشاشة */
+  justify-content: center;
+}
+
 
 /* تحسينات للشريط الجانبي */
 .sidebar {

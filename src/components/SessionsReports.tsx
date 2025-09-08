@@ -18,6 +18,45 @@ interface SessionReportStatus {
   startTime: string;
 }
 
+// دالة مساعدة للتحقق من صحة التاريخ
+const isValidDate = (date: any): boolean => {
+  if (!date) return false;
+  const d = new Date(date);
+  return d instanceof Date && !isNaN(d.getTime());
+};
+
+// دالة مساعدة لتنسيق التاريخ بأمان
+const formatDateSafely = (date: any, format: 'date' | 'datetime' = 'date'): string => {
+  if (!isValidDate(date)) {
+    return 'غير محدد';
+  }
+  
+  try {
+    const d = new Date(date);
+    if (format === 'datetime') {
+      return d.toLocaleString('en-GB');
+    }
+    return d.toLocaleDateString('en-GB');
+  } catch (error) {
+    console.error('خطأ في تنسيق التاريخ:', error);
+    return 'تاريخ غير صحيح';
+  }
+};
+
+// دالة مساعدة لتحويل التاريخ إلى ISO بأمان
+const toISOStringSafely = (date: any): string => {
+  if (!isValidDate(date)) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  try {
+    return new Date(date).toISOString().split('T')[0];
+  } catch (error) {
+    console.error('خطأ في تحويل التاريخ إلى ISO:', error);
+    return new Date().toISOString().split('T')[0];
+  }
+};
+
 export const SessionsReports: React.FC = () => {
   const { sessions, classes, teachers, subjects, grades, locations } = useApp();
   const [reportsStatus, setReportsStatus] = useState<SessionReportStatus[]>([]);
@@ -35,6 +74,7 @@ export const SessionsReports: React.FC = () => {
   const fetchReportsStatus = async () => {
     setLoading(true);
     try {
+      console.log('📊 جلب حالة التقارير...');
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/reports/session-status`, {
         method: 'GET',
         headers: {
@@ -44,12 +84,25 @@ export const SessionsReports: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        setReportsStatus(result.data || []);
+        console.log('📡 استجابة حالة التقارير:', result);
+        
+        // معالجة البيانات وتنظيف التواريخ
+        const processedData = (result.data || []).map((report: any) => ({
+          ...report,
+          startTime: isValidDate(report.startTime) ? report.startTime : new Date().toISOString(),
+          lastAttemptAt: isValidDate(report.lastAttemptAt) ? report.lastAttemptAt : null,
+          completedAt: isValidDate(report.completedAt) ? report.completedAt : null
+        }));
+        
+        setReportsStatus(processedData);
+        console.log('✅ تم تحميل حالة التقارير:', processedData.length, 'عنصر');
       } else {
-        console.error('فشل في جلب حالة التقارير');
+        console.error('فشل في جلب حالة التقارير:', response.status, response.statusText);
+        setReportsStatus([]);
       }
     } catch (error) {
       console.error('خطأ في جلب حالة التقارير:', error);
+      setReportsStatus([]);
     } finally {
       setLoading(false);
     }
@@ -59,6 +112,8 @@ export const SessionsReports: React.FC = () => {
   const handleRetrySession = async (sessionId: string) => {
     setRetryingSession(sessionId);
     try {
+      console.log('🔄 إعادة إرسال تقارير الحصة:', sessionId);
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/reports/session-status/${sessionId}/reset`, {
         method: 'POST',
         headers: {
@@ -80,10 +135,12 @@ export const SessionsReports: React.FC = () => {
           alert('تم بدء إعادة إرسال التقارير بنجاح');
           await fetchReportsStatus();
         } else {
-          alert('فشل في إعادة إرسال التقارير');
+          const errorResult = await sendResponse.json();
+          alert(`فشل في إعادة إرسال التقارير: ${errorResult.message || 'خطأ غير معروف'}`);
         }
       } else {
-        alert('فشل في إعادة تعيين حالة التقارير');
+        const errorResult = await response.json();
+        alert(`فشل في إعادة تعيين حالة التقارير: ${errorResult.message || 'خطأ غير معروف'}`);
       }
     } catch (error) {
       console.error('خطأ في إعادة الإرسال:', error);
@@ -95,19 +152,30 @@ export const SessionsReports: React.FC = () => {
 
   // تحميل البيانات عند بدء الصفحة
   useEffect(() => {
+    console.log('🔄 تحميل صفحة حالة التقارير...');
     fetchReportsStatus();
   }, []);
 
-  // فلترة البيانات
+  // فلترة البيانات مع معالجة آمنة للتواريخ
   const filteredReports = reportsStatus.filter(report => {
-    const matchesStatus = selectedStatus === '' || report.status === selectedStatus;
-    const matchesClass = selectedClass === '' || 
-      sessions.find(s => s.id === report.sessionId)?.classId === selectedClass;
-    
-    const sessionDate = new Date(report.startTime).toISOString().split('T')[0];
-    const matchesDate = sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate;
-    
-    return matchesStatus && matchesClass && matchesDate;
+    try {
+      const matchesStatus = selectedStatus === '' || report.status === selectedStatus;
+      
+      const matchesClass = selectedClass === '' || 
+        sessions.find(s => s.id === report.sessionId)?.classId === selectedClass;
+      
+      // معالجة آمنة للتاريخ
+      let matchesDate = true;
+      if (isValidDate(report.startTime)) {
+        const sessionDate = toISOStringSafely(report.startTime);
+        matchesDate = sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate;
+      }
+      
+      return matchesStatus && matchesClass && matchesDate;
+    } catch (error) {
+      console.error('خطأ في فلترة التقرير:', error, report);
+      return false; // استبعاد التقارير التي تحتوي على أخطاء
+    }
   });
 
   // دالة للحصول على أيقونة ولون الحالة
@@ -160,14 +228,18 @@ export const SessionsReports: React.FC = () => {
 
   // دالة للحصول على تفاصيل الحالة
   const getStatusDetails = (report: SessionReportStatus) => {
+    const total = report.totalStudents || 0;
+    const success = report.successfulSends || 0;
+    const failed = report.failedSends || 0;
+    
     if (report.status === 'sent') {
-      return `تم الإرسال لجميع الطلاب (${report.successfulSends}/${report.totalStudents})`;
+      return `تم الإرسال لجميع الطلاب (${success}/${total})`;
     } else if (report.status === 'partial_failed') {
-      return `نجح: ${report.successfulSends} | فشل: ${report.failedSends} من أصل ${report.totalStudents}`;
+      return `نجح: ${success} | فشل: ${failed} من أصل ${total}`;
     } else if (report.status === 'failed') {
-      return `فشل الإرسال لجميع الطلاب (${report.totalStudents})`;
+      return `فشل الإرسال لجميع الطلاب (${total})`;
     } else if (report.status === 'sending') {
-      return `جاري الإرسال... (${report.successfulSends}/${report.totalStudents})`;
+      return `جاري الإرسال... (${success}/${total})`;
     } else {
       return 'لم تتم أي محاولة إرسال';
     }
@@ -316,7 +388,7 @@ export const SessionsReports: React.FC = () => {
                         <div>
                           <span className="text-gray-600">التاريخ:</span>
                           <span className="font-medium mr-2">
-                            {new Date(report.startTime).toLocaleDateString('en-GB')}
+                            {formatDateSafely(report.startTime)}
                           </span>
                         </div>
                       </div>
@@ -349,7 +421,7 @@ export const SessionsReports: React.FC = () => {
                           <div>
                             <span className="text-gray-600">آخر محاولة:</span>
                             <span className="font-medium mr-2">
-                              {new Date(report.lastAttemptAt).toLocaleString('en-GB')}
+                              {formatDateSafely(report.lastAttemptAt, 'datetime')}
                             </span>
                           </div>
                         )}
@@ -357,7 +429,7 @@ export const SessionsReports: React.FC = () => {
                           <div>
                             <span className="text-gray-600">تاريخ الإكمال:</span>
                             <span className="font-medium mr-2">
-                              {new Date(report.completedAt).toLocaleString('en-GB')}
+                              {formatDateSafely(report.completedAt, 'datetime')}
                             </span>
                           </div>
                         )}
@@ -422,7 +494,7 @@ export const SessionsReports: React.FC = () => {
                         {report.teacherName || 'غير محدد'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(report.startTime).toLocaleDateString('en-GB')}
+                        {formatDateSafely(report.startTime)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center space-x-2 space-x-reverse">
@@ -436,10 +508,7 @@ export const SessionsReports: React.FC = () => {
                         {getStatusDetails(report)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {report.lastAttemptAt 
-                          ? new Date(report.lastAttemptAt).toLocaleString('en-GB')
-                          : 'لا يوجد'
-                        }
+                        {formatDateSafely(report.lastAttemptAt, 'datetime')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2 space-x-reverse">
@@ -506,7 +575,7 @@ export const SessionsReports: React.FC = () => {
                     <div className="mobile-card-field">
                       <div className="mobile-card-label">التاريخ</div>
                       <div className="mobile-card-value">
-                        {new Date(report.startTime).toLocaleDateString('en-GB')}
+                        {formatDateSafely(report.startTime)}
                       </div>
                     </div>
                     <div className="mobile-card-field">
@@ -529,10 +598,7 @@ export const SessionsReports: React.FC = () => {
                     <div className="mobile-card-field">
                       <div className="mobile-card-label">آخر محاولة</div>
                       <div className="mobile-card-value">
-                        {report.lastAttemptAt 
-                          ? new Date(report.lastAttemptAt).toLocaleString('en-GB')
-                          : 'لا يوجد'
-                        }
+                        {formatDateSafely(report.lastAttemptAt, 'datetime')}
                       </div>
                     </div>
                   </div>

@@ -4,7 +4,6 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Session = require('../models/Session');
 const SessionReportStatus = require('../models/SessionReportStatus');
-const SessionReportStatus = require('../models/SessionReportStatus');
 const Location = require('../models/Location');
 const Subject = require('../models/Subject');
 const { executeQuery } = require('../config/database');
@@ -856,21 +855,17 @@ router.put('/sessions/:id/toggle-status', async (req, res) => {
     });
     
     // تحديد الحالة الجديدة
-    let newStatus;
-    switch (session.status) {
-      case 'scheduled':
-        newStatus = 'active';
-        break;
-      case 'active':
-        newStatus = 'completed';
-        break;
-      case 'completed':
-        newStatus = 'scheduled';
-        break;
-      default:
-        newStatus = 'active';
-    }
-    
+let newStatus;
+switch (session.status) {
+  case 'active':
+    newStatus = 'completed';
+    break;
+  case 'completed':
+    newStatus = 'active';
+    break;
+  default:
+    newStatus = 'active'; // لو الحالة مش متعرفة، يرجعها لـ active
+}
     console.log('🔄 تغيير الحالة من', session.status, 'إلى', newStatus);
     
     // تحديث الحالة في قاعدة البيانات
@@ -1102,7 +1097,6 @@ router.get('/reports', async (req, res) => {
       console.log('📋 عينة من التقارير:', reports.slice(0, 2));
     }
     
-    // تحويل أسماء الحقول لتتطابق مع Frontend
     const processedReports = reports.map(report => ({
       id: report.id,
       studentId: report.student_id,
@@ -1132,23 +1126,24 @@ router.get('/reports', async (req, res) => {
     console.log('📤 إرسال', processedReports.length, 'تقرير للواجهة الأمامية');
     res.json({ success: true, data: processedReports });
   } catch (error) {
-    console.error('خطأ في جلب التقارير:', error);
+    console.error('خطأ في جلب التقارير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في جلب البيانات' });
   }
 });
 
-// جلب حالة إرسال التقارير لجميع الحصص
+// جلب حالة التقارير
 router.get('/reports/session-status', async (req, res) => {
   try {
-    console.log('📊 جلب حالة إرسال التقارير لجميع الحصص...');
-    const statuses = await SessionReportStatus.getAll();
-    console.log('✅ تم جلب حالة التقارير:', statuses.length, 'حصة');
-    res.json({ success: true, data: statuses });
+    console.log('📊 طلب جلب حالة التقارير...');
+    const reportsStatus = await SessionReportStatus.getComprehensiveReport();
+    console.log('📡 حالة التقارير المجلبة:', reportsStatus?.length || 0, 'عنصر');
+    res.json({ success: true, data: reportsStatus });
   } catch (error) {
-    console.error('Error fetching session report statuses:', error);
+    console.error('خطأ في جلب حالة التقارير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في جلب حالة التقارير' });
   }
 });
+
 
 // جلب تفاصيل إرسال التقارير لحصة معينة
 router.get('/reports/session-status/:sessionId', async (req, res) => {
@@ -1161,13 +1156,10 @@ router.get('/reports/session-status/:sessionId', async (req, res) => {
     
     res.json({ 
       success: true, 
-      data: {
-        status,
-        details
-      }
+      data: { status, details }
     });
   } catch (error) {
-    console.error('Error fetching session report details:', error);
+    console.error('خطأ في جلب تفاصيل التقارير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في جلب تفاصيل التقارير' });
   }
 });
@@ -1176,26 +1168,27 @@ router.get('/reports/session-status/:sessionId', async (req, res) => {
 router.post('/reports/session-status/:sessionId/reset', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    console.log('🔄 إعادة تعيين حالة إرسال التقارير للحصة:', sessionId);
+    console.log('🔄 إعادة تعيين حالة التقارير للحصة:', sessionId);
     
-    await SessionReportStatus.resetReportStatus(sessionId);
-    
-    res.json({ 
-      success: true, 
-      message: 'تم إعادة تعيين حالة إرسال التقارير بنجاح'
-    });
+    const success = await SessionReportStatus.resetReportStatus(sessionId);
+    if (success) {
+      console.log('✅ تم إعادة تعيين حالة التقارير بنجاح');
+      res.json({ success: true, message: 'تم إعادة تعيين حالة التقارير بنجاح' });
+    } else {
+      res.status(400).json({ success: false, message: 'فشل في إعادة تعيين حالة التقارير' });
+    }
   } catch (error) {
-    console.error('Error resetting session report status:', error);
+    console.error('خطأ في إعادة تعيين حالة التقارير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في إعادة تعيين حالة التقارير' });
   }
 });
 
+// إضافة/تحديث تقرير
 router.post('/reports', async (req, res) => {
   try {
     console.log('📝 إضافة/تحديث تقرير جديد:', req.body);
     const { studentId, sessionId, teacherRating, recitationScore, quizScore, participation, behavior, homework, comments, strengths, areasForImprovement } = req.body;
     
-    // التحقق من صحة البيانات
     if (!studentId || !sessionId || !teacherRating || !participation) {
       return res.status(400).json({ 
         success: false, 
@@ -1203,13 +1196,11 @@ router.post('/reports', async (req, res) => {
       });
     }
     
-    // التحقق من وجود تقرير سابق
     const existingQuery = 'SELECT id FROM reports WHERE student_id = ? AND session_id = ?';
     const existing = await executeQuery(existingQuery, [studentId, sessionId]);
     
     if (existing.length > 0) {
       console.log('🔄 تحديث تقرير موجود، ID:', existing[0].id);
-      // تحديث التقرير الموجود
       const updateQuery = `
         UPDATE reports 
         SET teacher_rating = ?, recitation_score = ?, quiz_score = ?, participation = ?, behavior = ?, homework = ?, 
@@ -1224,7 +1215,6 @@ router.post('/reports', async (req, res) => {
       res.json({ success: true, data: { id: existing[0].id } });
     } else {
       console.log('➕ إنشاء تقرير جديد');
-      // إنشاء تقرير جديد
       const insertQuery = `
         INSERT INTO reports (student_id, session_id, teacher_rating, recitation_score, quiz_score, participation, behavior, homework, comments, strengths, areas_for_improvement) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1237,11 +1227,12 @@ router.post('/reports', async (req, res) => {
       res.json({ success: true, data: { id: result.insertId } });
     }
   } catch (error) {
-    console.error('خطأ في إضافة التقرير:', error);
+    console.error('خطأ في إضافة التقرير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في إضافة التقرير' });
   }
 });
 
+// تحديث تقرير
 router.put('/reports/:id', async (req, res) => {
   try {
     const { teacherRating, recitationScore, quizScore, participation, behavior, homework, comments, strengths, areasForImprovement } = req.body;
@@ -1257,18 +1248,19 @@ router.put('/reports/:id', async (req, res) => {
     ]);
     res.json({ success: result.affectedRows > 0 });
   } catch (error) {
-    console.error('خطأ في تحديث التقرير:', error);
+    console.error('خطأ في تحديث التقرير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في تحديث التقرير' });
   }
 });
 
+// حذف تقرير
 router.delete('/reports/:id', async (req, res) => {
   try {
     const query = 'DELETE FROM reports WHERE id = ?';
     const result = await executeQuery(query, [req.params.id]);
     res.json({ success: result.affectedRows > 0 });
   } catch (error) {
-    console.error('خطأ في حذف التقرير:', error);
+    console.error('خطأ في حذف التقرير:', error.stack);
     res.status(500).json({ success: false, message: 'خطأ في حذف التقرير' });
   }
 });
@@ -1500,13 +1492,29 @@ router.post('/whatsapp/send-session-report', async (req, res) => {
     }
     
     // تحديث حالة الإرسال إلى "جاري الإرسال"
-    await SessionReportStatus.markAsSending(sessionId, 0);
+    //await SessionReportStatus.markAsSending(sessionId, 0);
     
-    console.log('📤 بدء إرسال تقرير الحصة:', sessionId);
-    const result = await whatsappService.sendSessionReport(sessionId);
+    //console.log('📤 بدء إرسال تقرير الحصة:', sessionId);
+   // const result = await whatsappService.sendSessionReport(sessionId);
     
     // تحديث حالة الإرسال بناءً على النتيجة
-    await SessionReportStatus.markAsCompleted(sessionId, result);
+   // await SessionReportStatus.markAsCompleted(sessionId, result);
+
+    // NEW for Count Students who got message
+    // جلب عدد الطلاب في الحصة لإظهار العدد الصحيح بدلاً من 0
+const countQuery = 'SELECT COUNT(*) as total FROM students WHERE class_id = (SELECT class_id FROM sessions WHERE id = ?)';
+const [countResult] = await executeQuery(countQuery, [sessionId]);
+const totalStudents = countResult?.total || 0;
+
+// تحديث حالة الإرسال إلى "جاري الإرسال" مع العدد الصحيح
+await SessionReportStatus.markAsSending(sessionId, totalStudents);
+
+console.log('📤 بدء إرسال تقرير الحصة:', sessionId);
+const result = await whatsappService.sendSessionReport(sessionId);
+
+// تحديث حالة الإرسال بناءً على النتيجة
+await SessionReportStatus.markAsCompleted(sessionId, result);
+//--------------------------------
     
     console.log('📊 نتيجة الإرسال:', result);
     res.json({ 
@@ -1557,16 +1565,18 @@ router.post('/whatsapp/test-message', async (req, res) => {
   }
 });
 
-// الحصول على إحصائيات لوحة التحكم
+
+
+// 1. الحصول على إحصائيات لوحة التحكم
 router.get('/dashboard/stats', async (req, res) => {
   try {
     // إحصائيات عامة
-    const totalStudents = await executeQuery('SELECT COUNT(*) as count FROM students WHERE is_active = TRUE');
-    const totalSessions = await executeQuery('SELECT COUNT(*) as count FROM sessions');
-    const totalClasses = await executeQuery('SELECT COUNT(*) as count FROM classes WHERE is_active = TRUE');
-    
+    const totalStudentsQuery = executeQuery('SELECT COUNT(*) as count FROM students WHERE is_active = TRUE');
+    const totalSessionsQuery = executeQuery('SELECT COUNT(*) as count FROM sessions');
+    const totalClassesQuery = executeQuery('SELECT COUNT(*) as count FROM classes WHERE is_active = TRUE');
+
     // إحصائيات الحضور اليوم
-    const todayAttendance = await executeQuery(`
+    const todayAttendanceQuery = executeQuery(`
       SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
@@ -1574,58 +1584,49 @@ router.get('/dashboard/stats', async (req, res) => {
       FROM attendance 
       WHERE record_time >= CURDATE() AND record_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
     `);
-    
-    const attendanceRate = todayAttendance[0].total > 0 
-      ? (todayAttendance[0].present / todayAttendance[0].total) * 100 
+
+    // جلب كل النتائج معًا لتسريع الأداء
+    const [
+      totalStudents,
+      totalSessions,
+      totalClasses,
+      todayAttendance
+    ] = await Promise.all([
+      totalStudentsQuery,
+      totalSessionsQuery,
+      totalClassesQuery,
+      todayAttendanceQuery
+    ]);
+
+    const attendanceRate = todayAttendance[0].total > 0
+      ? (todayAttendance[0].present / todayAttendance[0].total) * 100
       : 0;
-    
-    // المجموعات منخفضة الحضور
-    const lowAttendanceClasses = await executeQuery(`
-      SELECT c.name 
-      FROM classes c
-      JOIN sessions s ON c.id = s.class_id
-      JOIN attendance a ON s.id = a.session_id
-      WHERE a.record_time >= CURDATE() AND a.record_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-      GROUP BY c.id, c.name
-      HAVING (SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) / COUNT(*)) * 100 < 70
-    `);
-    console.log('📊 طلب حالة WhatsApp-Web.js...');
-    const sessionsQuery = `
-      SELECT s.*, c.name as class_name, t.name as teacher_name, 
-             sub.name as subject_name, l.name as location_name, l.room_number,
-             srs.status as report_status,
-             srs.total_students as report_total_students,
-             srs.successful_sends as report_successful_sends,
-             srs.failed_sends as report_failed_sends,
-             srs.last_attempt_at as report_last_attempt,
-             srs.completed_at as report_completed_at,
-             srs.error_message as report_error_message
-      FROM sessions s
-      JOIN classes c ON s.class_id = c.id
-      LEFT JOIN teachers t ON c.teacher_id = t.id
-      LEFT JOIN subjects sub ON c.subject_id = sub.id
-      LEFT JOIN locations l ON s.location_id = l.id
-      LEFT JOIN session_reports_status srs ON s.id = srs.session_id
-      ORDER BY s.start_time DESC
-    `;
-    
-    const sessions = await executeQuery(sessionsQuery);
-    const isConnected = whatsappService.getConnectionStatus();
-    
+
     res.json({
       success: true,
       data: {
-        connected: detailedStatus.connected || isConnected,
-        ready: detailedStatus.ready || isConnected,
-        service: 'whatsapp-web.js',
-        version: '1.23.0',
+        totalStudents: totalStudents[0].count,
+        totalSessions: totalSessions[0].count,
         totalClasses: totalClasses[0].count,
         attendanceRate: Math.round(attendanceRate * 10) / 10,
         todayPresent: todayAttendance[0].present || 0,
         todayAbsent: todayAttendance[0].absent || 0,
-        error: detailedStatus.error || null
       }
-// جلب حالة إرسال التقارير لحصة معينة
+    });
+
+  } catch (error) {
+    console.error('❌ خطأ في جلب إحصائيات لوحة التحكم:', error);
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في الخادم عند جلب الإحصائيات'
+    });
+  }
+});
+
+
+// 2. جلب حالة إرسال التقارير لحصة معينة
+
+
 router.get('/sessions/:id/report-status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1644,7 +1645,8 @@ router.get('/sessions/:id/report-status', async (req, res) => {
   }
 });
 
-// إعادة تعيين حالة إرسال التقارير
+
+// 3. إعادة تعيين حالة إرسال التقارير
 router.post('/sessions/:id/reset-report-status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1663,7 +1665,8 @@ router.post('/sessions/:id/reset-report-status', async (req, res) => {
   }
 });
 
-// جلب تقرير شامل لحالة إرسال التقارير
+
+// 4. جلب تقرير شامل لحالة إرسال التقارير
 router.get('/reports/session-reports-status', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -1681,14 +1684,9 @@ router.get('/reports/session-reports-status', async (req, res) => {
     });
   }
 });
-    });
-  } catch (error) {
-    console.error('خطأ في جلب الإحصائيات:', error);
-    res.status(500).json({ success: false, message: 'خطأ في جلب الإحصائيات' });
-  }
-});
 
-// إضافة endpoint لجلب معلومات الحساب
+
+// 5. إضافة endpoint لجلب معلومات الحساب
 router.get('/whatsapp/info', async (req, res) => {
   try {
     console.log('👤 طلب معلومات حساب WhatsApp-Web.js...');
@@ -1714,7 +1712,8 @@ router.get('/whatsapp/info', async (req, res) => {
   }
 });
 
-// إضافة endpoint لاختبار الرسائل
+
+// 6. إضافة endpoint لاختبار الرسائل (ملاحظة: تم إصلاح خطأ try/catch هنا أيضًا)
 router.post('/whatsapp/test-message', async (req, res) => {
   try {
     const { phoneNumber, message } = req.body;
@@ -1743,10 +1742,6 @@ router.post('/whatsapp/test-message', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ خطأ في اختبار الرسالة:', error);
-    res.status(500).json({
-      success: false,
-      message: 'خطأ في اختبار الرسالة: ' + error.message
-    
     // تحديث حالة الإرسال إلى "فشل"
     if (req.body.sessionId) {
       await SessionReportStatus.createOrUpdate(req.body.sessionId, {
@@ -1754,7 +1749,9 @@ router.post('/whatsapp/test-message', async (req, res) => {
         errorMessage: error.message
       });
     }
-    
+    res.status(500).json({
+      success: false,
+      message: 'خطأ في اختبار الرسالة: ' + error.message
     });
   }
 });

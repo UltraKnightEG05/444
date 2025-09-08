@@ -7,7 +7,7 @@ export const StudentsManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(25);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [generatedBarcode, setGeneratedBarcode] = useState<string>('');
@@ -437,7 +437,7 @@ const filteredStudents = students.filter(student => {
           })}
         </div>
         
-        {/* Pagination */}
+  {/* Pagination */}
         {totalPages > 1 && (
           <div className="pagination">
             <button
@@ -448,7 +448,7 @@ const filteredStudents = students.filter(student => {
               السابق
             </button>
             
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1 justify-center">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
@@ -472,7 +472,7 @@ const filteredStudents = students.filter(student => {
           </div>
         )}
       </div>
-
+        
       {currentStudents.length === 0 && (
         <div className="layout-center py-12">
           <div className="text-center">

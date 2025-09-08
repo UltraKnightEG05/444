@@ -4,23 +4,38 @@ class SessionReportStatus {
   // جلب حالة إرسال التقارير لحصة معينة
   static async getBySessionId(sessionId) {
     const query = `
-      SELECT * FROM session_reports_status 
+      SELECT * 
+      FROM session_reports_status 
       WHERE session_id = ?
+      ORDER BY id DESC
+      LIMIT 1
     `;
     const results = await executeQuery(query, [sessionId]);
-    return results[0] || null;
+    return results[0] ?? null;
   }
 
-  // جلب جميع حالات إرسال التقارير
+  // جلب جميع حالات إرسال التقارير (آخر محاولة لكل حصة فقط)
   static async getAll() {
     const query = `
       SELECT srs.*, s.start_time, s.end_time, c.name as class_name
       FROM session_reports_status srs
       JOIN sessions s ON srs.session_id = s.id
       JOIN classes c ON s.class_id = c.id
+      WHERE srs.id = (
+        SELECT MAX(id) 
+        FROM session_reports_status 
+        WHERE session_id = srs.session_id
+      )
       ORDER BY srs.updated_at DESC
     `;
-    return await executeQuery(query);
+    const results = await executeQuery(query);
+    console.log("🔍 getAll results:", results.map(r => ({
+      id: r.id,
+      session: r.session_id,
+      status: r.status,
+      updated: r.updated_at
+    })));
+    return results;
   }
 
   // إنشاء أو تحديث حالة إرسال التقارير
@@ -73,7 +88,7 @@ class SessionReportStatus {
 
   // تحديث حالة الإرسال عند الانتهاء
   static async markAsCompleted(sessionId, results) {
-    const { totalStudents, sentMessages, failedMessages, results: detailedResults, errorMessage } = results;
+    const { totalStudents, sentMessages, failedMessages, detailedResults, errorMessage } = results;
     
     let status;
     if (failedMessages === 0) {
@@ -172,34 +187,46 @@ class SessionReportStatus {
   }
 
   // جلب إحصائيات إرسال التقارير
-  static async getReportStatistics(sessionId = null) {
-    let query = `
-      SELECT 
-        srs.session_id,
-        srs.status,
-        srs.total_students,
-        srs.successful_sends,
-        srs.failed_sends,
-        srs.last_attempt_at,
-        srs.completed_at,
-        c.name as class_name,
-        s.start_time
-      FROM session_reports_status srs
-      JOIN sessions s ON srs.session_id = s.id
-      JOIN classes c ON s.class_id = c.id
-    `;
-    
-    const params = [];
-    
-    if (sessionId) {
-      query += ' WHERE srs.session_id = ?';
-      params.push(sessionId);
-    }
-    
-    query += ' ORDER BY srs.updated_at DESC';
-    
-    return await executeQuery(query, params);
+ static async getComprehensiveReport(startDate = null, endDate = null) {
+  let query = `
+    SELECT 
+      srs.session_id,
+      srs.status,
+      srs.total_students,
+      srs.successful_sends,
+      srs.failed_sends,
+      srs.last_attempt_at,
+      srs.completed_at,
+      c.name as class_name,
+      t.name as teacher_name,
+      sub.name as subject_name,
+      s.start_time,
+      s.end_time,
+      ROUND((srs.successful_sends / srs.total_students) * 100, 2) as success_rate
+    FROM session_reports_status srs
+    JOIN sessions s ON srs.session_id = s.id
+    JOIN classes c ON s.class_id = c.id
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    LEFT JOIN subjects sub ON c.subject_id = sub.id
+    WHERE srs.id = (SELECT MAX(id) FROM session_reports_status WHERE session_id = srs.session_id)
+  `;
+  
+  const params = [];
+  
+  if (startDate) {
+    query += ' AND DATE(s.start_time) >= ?';
+    params.push(startDate);
   }
+  
+  if (endDate) {
+    query += ' AND DATE(s.start_time) <= ?';
+    params.push(endDate);
+  }
+  
+  query += ' ORDER BY s.start_time DESC';
+  
+  return await executeQuery(query, params);
+}
 
   // حذف حالة إرسال التقارير (عند حذف الحصة)
   static async deleteBySessionId(sessionId) {
@@ -218,8 +245,8 @@ class SessionReportStatus {
   // إعادة تعيين حالة إرسال التقارير (لإعادة المحاولة)
   static async resetReportStatus(sessionId) {
     const queries = [
-      'UPDATE session_report_details SET send_status = "pending", error_message = NULL WHERE session_id = ?',
-      'UPDATE session_reports_status SET status = "pending", successful_sends = 0, failed_sends = 0, error_message = NULL WHERE session_id = ?'
+      "UPDATE session_report_details SET send_status = 'pending', error_message = NULL WHERE session_id = ?",
+      "UPDATE session_reports_status SET status = 'pending', successful_sends = 0, failed_sends = 0, error_message = NULL WHERE session_id = ?"
     ];
     
     for (const query of queries) {
@@ -288,3 +315,4 @@ class SessionReportStatus {
 }
 
 module.exports = SessionReportStatus;
+
